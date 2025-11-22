@@ -20,10 +20,6 @@
     </ItemGroup>
 
     <ItemGroup>
-      <Folder Include="Core\" />
-    </ItemGroup>
-
-    <ItemGroup>
       <ProjectReference Include="..\MessageBroker.Core\MessageBroker.Core.csproj" />
     </ItemGroup>
 
