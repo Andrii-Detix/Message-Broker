@@ -59,4 +59,130 @@ public class MessageTests
         actual.DeliveryCount.ShouldBe(0);
         actual.MaxDeliveryAttempts.ShouldBe(maxDeliveryAttempts);
     }
+
+    [Fact]
+    public void TryEnqueue_TransitionsToEnqueued_WhenMessageIsCreated()
+    {
+        // Arrange
+        Message sut = Message.Create(Guid.CreateVersion7(), [], 1);
+        
+        // Act
+        bool actual = sut.TryEnqueue();
+        
+        // Assert
+        actual.ShouldBeTrue();
+        sut.State.ShouldBe(MessageState.Enqueued);
+    }
+
+    [Fact]
+    public void TryEnqueue_TransitionsToEnqueued_WhenMessageIsSentAndMaxDeliveryAttemptsIsNotReached()
+    {
+        // Arrange
+        Message sut = Message.Create(Guid.CreateVersion7(), [], 2);
+        sut.TryEnqueue();
+        sut.TrySend();
+        
+        // Act
+        bool actual = sut.TryEnqueue();
+        
+        // Assert
+        actual.ShouldBeTrue();
+        sut.State.ShouldBe(MessageState.Enqueued);
+    }
+
+    [Fact]
+    public void TryEnqueue_ReturnsFalse_WhenMessageIsAlreadyEnqueued()
+    {
+        // Arrange
+        Message sut = Message.Create(Guid.CreateVersion7(), [], 1);
+        sut.TryEnqueue();
+        
+        // Act
+        bool actual = sut.TryEnqueue();
+        
+        // Assert
+        actual.ShouldBeFalse();
+    }
+
+    [Fact]
+    public void TryEnqueue_TransitionsToFailed_WhenMaxDeliveryAttemptsIsReached()
+    {
+        // Arrange
+        Message sut = Message.Create(Guid.CreateVersion7(), [], 1);
+        sut.TryEnqueue();
+        sut.TrySend();
+        
+        // Act
+        bool actual = sut.TryEnqueue();
+        
+        // Assert
+        actual.ShouldBeFalse();
+        sut.State.ShouldBe(MessageState.Failed);
+    }
+
+    [Fact]
+    public void TrySend_TransitionsToSent_WhenMessageIsEnqueued()
+    {
+        // Arrange
+        Message sut = Message.Create(Guid.CreateVersion7(), [], 1);
+        sut.TryEnqueue();
+        
+        // Act
+        bool actual = sut.TrySend();
+        
+        // Assert
+        actual.ShouldBeTrue();
+        sut.State.ShouldBe(MessageState.Sent);
+        sut.LastSentAt.ShouldNotBeNull();
+        sut.LastSentAt.Value.ShouldBeLessThanOrEqualTo(DateTimeOffset.UtcNow);
+        sut.LastSentAt.Value.ShouldBeGreaterThanOrEqualTo(DateTimeOffset.UtcNow - TimeSpan.FromSeconds(1));
+        sut.DeliveryCount.ShouldBe(1);
+    }
+
+    [Fact]
+    public void TrySend_ReturnsFalse_WhenMessageIsNotEnqueued()
+    {
+        // Arrange
+        Message sut = Message.Create(Guid.CreateVersion7(), [], 1);
+        
+        // Act
+        bool actual = sut.TrySend();
+        
+        // Assert
+        actual.ShouldBeFalse();
+        sut.State.ShouldBe(MessageState.Created);
+        sut.LastSentAt.ShouldBeNull();
+        sut.DeliveryCount.ShouldBe(0);
+    }
+
+    [Fact]
+    public void TryMarkDelivered_TransitionsToDelivered_WhenMessageIsSent()
+    {
+        // Arrange
+        Message sut = Message.Create(Guid.CreateVersion7(), [], 1);
+        sut.TryEnqueue();
+        sut.TrySend();
+        
+        // Act
+        bool actual = sut.TryMarkDelivered();
+        
+        // Assert
+        actual.ShouldBeTrue();
+        sut.State.ShouldBe(MessageState.Delivered);
+    }
+
+    [Fact]
+    public void TryMarkDelivered_ReturnsFalse_WhenMessageIsNotSent()
+    {
+        // Arrange
+        Message sut = Message.Create(Guid.CreateVersion7(), [], 1);
+        sut.TryEnqueue();
+        
+        // Act
+        bool actual = sut.TryMarkDelivered();
+        
+        // Assert
+        actual.ShouldBeFalse();
+        sut.State.ShouldBe(MessageState.Enqueued);
+    }
 }
