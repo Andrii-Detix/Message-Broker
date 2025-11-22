@@ -5,6 +5,10 @@
     <File Path="Directory.Build.props" />
     <File Path="Directory.Packages.props" />
   </Folder>
-  <Folder Name="/src/" />
-  <Folder Name="/tests/" />
+  <Folder Name="/src/">
+    <Project Path="MessageBroker.Core/MessageBroker.Core.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="MessageBroker.UnitTests/MessageBroker.UnitTests.csproj" />
+  </Folder>
 </Solution>
