@@ -25,7 +25,7 @@ public class MessageQueue : IMessageQueue
         {
             throw new MaxSwapCountInvalidException();
         }
-        
+
         _maxSwapCount = maxSwapCount;
     }
 
@@ -70,13 +70,22 @@ public class MessageQueue : IMessageQueue
         _inFlight.TryAdd(message.Id, message);
 
         Interlocked.Decrement(ref _count);
-        
+
         return true;
     }
 
     public Message? Ack(Guid messageId)
     {
-        throw new NotImplementedException();
+        if (!_inFlight.TryRemove(messageId, out Message? message))
+        {
+            return null;
+        }
+
+        RemoveFromActiveMessages(messageId);
+
+        message.TryMarkDelivered();
+        
+        return message;
     }
 
     public IEnumerable<Message> TakeExpiredMessages(IExpiredMessagePolicy policy)

@@ -1,4 +1,5 @@
-﻿using MessageBroker.Core.Messages.Models;
+﻿using System.Collections.Concurrent;
+using MessageBroker.Core.Messages.Models;
 using MessageBroker.Core.Queues;
 using MessageBroker.Core.Queues.Exceptions;
 using Shouldly;
@@ -101,6 +102,27 @@ public class MessageQueueTests
         
         // Assert
         actual.ShouldBeTrue();
+        sut.Count.ShouldBe(1);
+    }
+
+    [Fact]
+    public void TryEnqueue_AddsMessageWithSameId_WhenPreviousMessageWithSameIdWasAcknowledged()
+    {
+        // Arrange
+        Guid id = Guid.CreateVersion7();
+        Message message1 = Message.Create(id, [], 1);
+        MessageQueue sut = new(1);
+        sut.TryEnqueue(message1);
+        sut.TryConsume(out _);
+        sut.Ack(id);
+        Message message2 = Message.Create(id, [], 1);
+        
+        // Act
+        bool actual = sut.TryEnqueue(message2);
+        
+        // Assert
+        actual.ShouldBeTrue();
+        message2.State.ShouldBe(MessageState.Enqueued);
         sut.Count.ShouldBe(1);
     }
 
@@ -260,5 +282,106 @@ public class MessageQueueTests
             messageIndexes.ShouldNotContain(-1);
             messageIndexes.ShouldBeInOrder(SortDirection.Ascending);
         }
+    }
+
+    [Fact]
+    public void Ack_ReturnsMessage_WhenMessageIsSent()
+    {
+        // Arrange
+        Message message = Message.Create(Guid.CreateVersion7(), [], 1);
+        MessageQueue sut = new(1);
+        sut.TryEnqueue(message);
+        sut.TryConsume(out _);
+        
+        // Act
+        Message? actual = sut.Ack(message.Id);
+        
+        // Assert
+        actual.ShouldNotBeNull();
+        actual.ShouldBe(message);
+    }
+
+    [Fact]
+    public void Ack_TransitionsMessageStateToDelivered_WhenMessageIsAcknowledged()
+    {
+        // Arrange
+        Message message = Message.Create(Guid.CreateVersion7(), [], 1);
+        MessageQueue sut = new(1);
+        sut.TryEnqueue(message);
+        sut.TryConsume(out _);
+        
+        // Act
+        Message? actual = sut.Ack(message.Id);
+        
+        // Assert
+        actual.ShouldNotBeNull();
+        actual.State.ShouldBe(MessageState.Delivered);
+    }
+    
+    [Fact]
+    public void Ack_ReturnsNull_WhenMessageIsNotSent()
+    {
+        // Arrange
+        Message message = Message.Create(Guid.CreateVersion7(), [], 1);
+        MessageQueue sut = new(1);
+        sut.TryEnqueue(message);
+        
+        // Act
+        Message? actual = sut.Ack(message.Id);
+        
+        // Assert
+        actual.ShouldBeNull();
+    }
+    
+    [Fact]
+    public void Ack_ReturnsNull_WhenMessageDoesNotContainMessageWithId()
+    {
+        // Arrange
+        MessageQueue sut = new(1);
+        
+        // Act
+        Message? actual = sut.Ack(Guid.CreateVersion7());
+        
+        // Assert
+        actual.ShouldBeNull();
+    }
+    
+    [Fact]
+    public void Ack_ReturnsNull_WhenMessageIsAlreadyAcknowledged()
+    {
+        // Arrange
+        Message message = Message.Create(Guid.CreateVersion7(), [], 1);
+        MessageQueue sut = new(1);
+        sut.TryEnqueue(message);
+        sut.TryConsume(out _);
+        sut.Ack(message.Id);
+        
+        // Act
+        Message? actual = sut.Ack(message.Id);
+        
+        // Assert
+        actual.ShouldBeNull();
+    }
+
+    [Fact]
+    public void Ack_AcknowledgesMessageOnlyOnce_WhenTryAcknowledgeSameMessageConcurrently()
+    {
+        // Arrange
+        Message message = Message.Create(Guid.CreateVersion7(), [], 1);
+        MessageQueue sut = new(1);
+        sut.TryEnqueue(message);
+        sut.TryConsume(out _);
+        ConcurrentBag<Message?> results = [];
+        
+        // Act
+        Parallel.ForEach(Enumerable.Range(0, 1000), _ =>
+        {
+            Message? actual = sut.Ack(message.Id);
+            results.Add(actual);
+        });
+        
+        // Assert
+        results.Count(m => m is not null).ShouldBe(1);
+        results.First(m => m is not null).ShouldBe(message);
     }
 }
