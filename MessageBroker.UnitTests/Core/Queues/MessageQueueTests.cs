@@ -1,7 +1,9 @@
 ﻿using System.Collections.Concurrent;
+using MessageBroker.Core.Abstractions;
 using MessageBroker.Core.Messages.Models;
 using MessageBroker.Core.Queues;
 using MessageBroker.Core.Queues.Exceptions;
+using Moq;
 using Shouldly;
 
 namespace MessageBroker.UnitTests.Core.Queues;
@@ -171,6 +173,54 @@ public class MessageQueueTests
         
         // Assert
         sut.Count.ShouldBe(1);
+    }
+
+    [Fact]
+    public void TryEnqueue_RequeueExpiredMessage_WhenMessageDoesNotReachMaxDeliveryAttempts()
+    {
+        // Arrange 
+        Message message = Message.Create(Guid.CreateVersion7(), [], 2);
+        MessageQueue sut = new(1);
+        sut.TryEnqueue(message);
+        sut.TryConsume(out _);
+        
+        Mock<IExpiredMessagePolicy> policyMock = new();
+        policyMock.Setup(p => p.IsExpired(It.IsAny<Message>())).Returns(true);
+        IExpiredMessagePolicy policy = policyMock.Object;
+        
+        Message expired = sut.TakeExpiredMessages(policy).First();
+        
+        // Act
+        bool actual = sut.TryEnqueue(expired);
+        
+        // Assert
+        actual.ShouldBeTrue();
+        expired.State.ShouldBe(MessageState.Enqueued);
+        sut.Count.ShouldBe(1);
+    }
+    
+    [Fact]
+    public void TryEnqueue_TransitionsMessageToFailed_WhenExpiredMessageReachesMaxDeliveryAttempts()
+    {
+        // Arrange 
+        Message message = Message.Create(Guid.CreateVersion7(), [], 1);
+        MessageQueue sut = new(1);
+        sut.TryEnqueue(message);
+        sut.TryConsume(out _);
+        
+        Mock<IExpiredMessagePolicy> policyMock = new();
+        policyMock.Setup(p => p.IsExpired(It.IsAny<Message>())).Returns(true);
+        IExpiredMessagePolicy policy = policyMock.Object;
+        
+        Message expired = sut.TakeExpiredMessages(policy).First();
+        
+        // Act
+        bool actual = sut.TryEnqueue(expired);
+        
+        // Assert
+        actual.ShouldBeFalse();
+        expired.State.ShouldBe(MessageState.Failed);
+        sut.Count.ShouldBe(0);
     }
 
     [Fact]
@@ -383,5 +433,93 @@ public class MessageQueueTests
         // Assert
         results.Count(m => m is not null).ShouldBe(1);
         results.First(m => m is not null).ShouldBe(message);
+    }
+
+    [Fact]
+    public void TakeExpiredMessages_ReturnsEmptyIEnumerable_WhenAllMessagesAreNotSent()
+    {
+        // Arrange
+        MessageQueue sut = new(1);
+        
+        Message[] messages = Enumerable.Range(0, 100)
+            .Select(_ => Message.Create(Guid.CreateVersion7(), [], 1))
+            .ToArray();
+        
+        Array.ForEach(messages, message => sut.TryEnqueue(message));
+        
+        Mock<IExpiredMessagePolicy> policyMock = new();
+        policyMock.Setup(p => p.IsExpired(It.IsAny<Message>())).Returns(true);
+        IExpiredMessagePolicy policy = policyMock.Object;
+        
+        // Act
+        IEnumerable<Message> actual = sut.TakeExpiredMessages(policy).ToList();
+        
+        // Assert
+        actual.ShouldNotBeNull();
+        actual.ShouldBeEmpty();
+    }
+    
+    [Fact]
+    public void TakeExpiredMessages_ReturnsEmptyIEnumerable_WhenAllMessagesAreNotExpired()
+    {
+        // Arrange
+        MessageQueue sut = new(1);
+
+        Message[] messages = Enumerable.Range(0, 100)
+            .Select(_ => Message.Create(Guid.CreateVersion7(), [], 1))
+            .ToArray();
+        
+        foreach (Message message in messages)
+        {
+            sut.TryEnqueue(message);
+            sut.TryConsume(out _);
+        }
+
+        Mock<IExpiredMessagePolicy> policyMock = new();
+        policyMock.Setup(p => p.IsExpired(It.IsAny<Message>())).Returns(false);
+        IExpiredMessagePolicy policy = policyMock.Object;
+        
+        // Act
+        IEnumerable<Message> actual = sut.TakeExpiredMessages(policy).ToList();
+        
+        // Assert
+        actual.ShouldNotBeNull();
+        actual.ShouldBeEmpty();
+    }
+
+    [Fact]
+    public void TakeExpiredMessages_ReturnsOnlyExpiredMessages_WhenQueueContainsMixedMessages()
+    {
+        // Arrange
+        MessageQueue sut = new(1);
+        
+        Guid[] expiredIds = [Guid.CreateVersion7(), Guid.CreateVersion7()];
+
+        Message[] messages = 
+        [
+            Message.Create(Guid.CreateVersion7(), [], 1),
+            Message.Create(expiredIds[0], [], 1),
+            Message.Create(expiredIds[1], [], 1),
+            Message.Create(Guid.CreateVersion7(), [], 1),
+        ];
+        
+        foreach (var message in messages)
+        {
+            sut.TryEnqueue(message);
+            sut.TryConsume(out _);
+        }
+
+        Mock<IExpiredMessagePolicy> policyMock = new();
+        policyMock.Setup(p => p.IsExpired(It.IsAny<Message>()))
+            .Returns((Message message) => expiredIds.Contains(message.Id));
+        IExpiredMessagePolicy policy = policyMock.Object;
+        
+        // Act
+        IEnumerable<Message> actual = sut.TakeExpiredMessages(policy).ToList();
+        
+        // Assert
+        actual.ShouldNotBeEmpty();
+        actual.Count().ShouldBe(2);
+        actual.Select(m => m.Id).ShouldBe(expiredIds, ignoreOrder: true);
     }
 }

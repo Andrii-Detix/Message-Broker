@@ -84,13 +84,30 @@ public class MessageQueue : IMessageQueue
         RemoveFromActiveMessages(messageId);
 
         message.TryMarkDelivered();
-        
+
         return message;
     }
 
     public IEnumerable<Message> TakeExpiredMessages(IExpiredMessagePolicy policy)
     {
-        throw new NotImplementedException();
+        List<Message> messages = [];
+
+        foreach (var message in _inFlight)
+        {
+            bool canBeMovedToExpired = policy.IsExpired(message.Value)
+                                       && _inFlight.TryRemove(message.Key, out _);
+
+            if (!canBeMovedToExpired)
+            {
+                continue;
+            }
+
+            messages.Add(message.Value);
+
+            RemoveFromActiveMessages(message.Key);
+        }
+
+        return messages;
     }
 
     private bool ExistsById(Guid messageId)
