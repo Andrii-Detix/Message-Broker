@@ -1,17 +1,43 @@
 ﻿using MessageBroker.Core.Messages.Models;
 using MessageBroker.Core.Queues;
+using MessageBroker.Core.Queues.Exceptions;
 using Shouldly;
 
 namespace MessageBroker.UnitTests.Core.Queues;
 
 public class MessageQueueTests
 {
+    [Theory]
+    [InlineData(0)]
+    [InlineData(-1)]
+    public void Constructor_ThrowsException_WhenMaxSwapCountIsLessThanOne(int maxSwapCount)
+    {
+        // Act
+        Action actual = () => new MessageQueue(maxSwapCount);
+        
+        // Assert
+        actual.ShouldThrow<MaxSwapCountInvalidException>();
+    }
+
+    [Theory]
+    [InlineData(1)]
+    [InlineData(2)]
+    public void Constructor_CreateQueue_WhenMaxSwapCountIsEqualOrGreaterThanOne(int maxSwapCount)
+    {
+        // Act
+        MessageQueue actual = new(maxSwapCount);
+        
+        // Assert
+        actual.ShouldNotBeNull();
+        actual.Count.ShouldBe(0);
+    }
+    
     [Fact]
     public void TryEnqueue_AddsMessageToQueue_WhenMessageIsNewAndUnique()
     {
         // Arrange
         Message message = Message.Create(Guid.CreateVersion7(), [], 1);
-        MessageQueue sut = new();
+        MessageQueue sut = new(1);
         
         // Act
         bool actual = sut.TryEnqueue(message);
@@ -28,7 +54,7 @@ public class MessageQueueTests
         Guid id = Guid.CreateVersion7();
         Message message1 = Message.Create(id, [], 1);
         Message message2 = Message.Create(id, [], 1);
-        MessageQueue sut = new();
+        MessageQueue sut = new(1);
         sut.TryEnqueue(message1);
         
         // Act
@@ -47,7 +73,7 @@ public class MessageQueueTests
         message.TryEnqueue();
         message.TrySend();
         message.TryMarkDelivered();
-        MessageQueue sut = new();
+        MessageQueue sut = new(1);
         
         // Act
         bool actual = sut.TryEnqueue(message);
@@ -67,7 +93,7 @@ public class MessageQueueTests
         deliveredMessage.TrySend();
         deliveredMessage.TryMarkDelivered();
         Message createdMessage = Message.Create(id, [], 1);
-        MessageQueue sut = new();
+        MessageQueue sut = new(1);
         sut.TryEnqueue(deliveredMessage);
         
         // Act
@@ -82,7 +108,7 @@ public class MessageQueueTests
     public void TryEnqueue_AddsAllMessages_WhenTryEnqueueMessagesConcurrently()
     {
         // Arrange
-        MessageQueue sut = new();
+        MessageQueue sut = new(1);
         int messageCount = 10000;
         
         Message[] messages = Enumerable
@@ -105,7 +131,7 @@ public class MessageQueueTests
     {
         // Arrange
         Guid id = Guid.CreateVersion7();
-        MessageQueue sut = new();
+        MessageQueue sut = new(1);
         int uniqueMessageCount = 10000;
         
         Message[] messages = Enumerable
@@ -123,5 +149,116 @@ public class MessageQueueTests
         
         // Assert
         sut.Count.ShouldBe(1);
+    }
+
+    [Fact]
+    public void TryConsume_ReturnsFalse_WhenQueueIsEmpty()
+    {
+        // Arrange
+        MessageQueue sut = new(1);
+        
+        // Act
+        bool success = sut.TryConsume(out Message? actual);
+        
+        // Assert
+        success.ShouldBeFalse();
+        actual.ShouldBeNull();
+        sut.Count.ShouldBe(0);
+    }
+
+    [Fact]
+    public void TryConsume_ReturnsMessage_WhenQueueIsNotEmpty()
+    {
+        // Arrange
+        Message message = Message.Create(Guid.CreateVersion7(), [], 1);
+        MessageQueue sut = new(1);
+        sut.TryEnqueue(message);
+        
+        // Act
+        bool success = sut.TryConsume(out Message? actual);
+        
+        // Assert
+        success.ShouldBeTrue();
+        actual.ShouldNotBeNull();
+        actual.ShouldBe(message);
+        sut.Count.ShouldBe(0);
+    }
+
+    [Fact]
+    public void TryConsume_TransitionsMessageStateToSent_WhenMessageIsConsumed()
+    {
+        // Arrange
+        Message message = Message.Create(Guid.CreateVersion7(), [], 1);
+        MessageQueue sut = new(1);
+        sut.TryEnqueue(message);
+        
+        // Act
+        bool success = sut.TryConsume(out Message? actual);
+        
+        // Assert
+        success.ShouldBeTrue();
+        actual.ShouldNotBeNull();
+        actual.State.ShouldBe(MessageState.Sent);
+    }
+    
+    [Fact]
+    public void TryConsume_ReturnsMessageInEnqueueOrder_WhenQueueHasMoreThanOneMessages()
+    {
+        // Arrange
+        Message message1 = Message.Create(Guid.CreateVersion7(), [], 1);
+        Message message2 = Message.Create(Guid.CreateVersion7(), [], 1);
+        MessageQueue sut = new(1);
+        sut.TryEnqueue(message1);
+        sut.TryEnqueue(message2);
+        
+        // Act
+        sut.TryConsume(out Message? actual1);
+        sut.TryConsume(out Message? actual2);
+        
+        // Assert
+        actual1.ShouldNotBeNull();
+        actual2.ShouldNotBeNull();
+        actual1.ShouldBe(message1);
+        actual2.ShouldBe(message2);
+        sut.Count.ShouldBe(0);
+    }
+
+    [Fact]
+    public void TryConsume_ReturnsMessagesInEnqueueOrderForEachThread_WhenTryConsumeMessagesConcurrently()
+    {
+        // Arrange
+        MessageQueue sut = new(100);
+        
+        Message[] messages = Enumerable
+            .Range(0, 10000)
+            .Select(_ => Message.Create(Guid.CreateVersion7(), [], 1))
+            .ToArray();
+        
+        Array.ForEach(messages, message => sut.TryEnqueue(message));
+
+        List<Message>[] threadMessages = [[], []];
+        
+        // Act
+        Parallel.ForEach(Enumerable.Range(0, 2), threadIdx =>
+        {
+            for (int i = 0; i < 5000; i++)
+            {
+                sut.TryConsume(out Message? message);
+                threadMessages[threadIdx].Add(message!);
+            }
+        });
+        
+        // Assert
+        sut.Count.ShouldBe(0);
+        threadMessages.Sum(tm => tm.Count).ShouldBe(10000);
+        foreach (var actual in threadMessages)
+        {
+            int[] messageIndexes = actual
+                .Select(message => messages.IndexOf(message))
+                .ToArray();
+            
+            messageIndexes.ShouldNotContain(-1);
+            messageIndexes.ShouldBeInOrder(SortDirection.Ascending);
+        }
     }
 }
