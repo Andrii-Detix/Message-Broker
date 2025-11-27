@@ -1,5 +1,6 @@
 ﻿using MessageBroker.Core.Messages.Exceptions;
 using MessageBroker.Core.Messages.Models;
+using Microsoft.Extensions.Time.Testing;
 using Shouldly;
 
 namespace MessageBroker.UnitTests.Core.Messages;
@@ -13,9 +14,10 @@ public class MessageTests
         Guid id = Guid.CreateVersion7();
         byte[] payload = null!;
         int maxDeliveryAttempts = 1;
+        FakeTimeProvider timeProvider = new FakeTimeProvider();
         
         // Act
-        Action actual = () => Message.Create(id, payload, maxDeliveryAttempts);
+        Action actual = () => Message.Create(id, payload, maxDeliveryAttempts, timeProvider);
 
         // Assert
         actual.ShouldThrow<PayloadNullReferenceException>();
@@ -29,12 +31,28 @@ public class MessageTests
         // Arrange
         Guid id = Guid.CreateVersion7();
         byte[] payload = [];
+        FakeTimeProvider timeProvider = new FakeTimeProvider();
         
         // Act
-        Action actual = () => Message.Create(id, payload, maxDeliveryAttempts);
+        Action actual = () => Message.Create(id, payload, maxDeliveryAttempts, timeProvider);
 
         // Assert
         actual.ShouldThrow<MaxDeliveryAttemptsInvalidException>();
+    }
+
+    [Fact]
+    public void Create_ThrowsException_WhenTimeProviderIsNull()
+    {
+        // Arrange
+        Guid id = Guid.CreateVersion7();
+        byte[] payload = [];
+        int maxDeliveryAttempts = 1;
+        
+        // Act
+        Action actual = () => Message.Create(id, payload, maxDeliveryAttempts, null!);
+        
+        // Assert
+        actual.ShouldThrow<ArgumentNullException>();
     }
 
     [Fact]
@@ -44,17 +62,17 @@ public class MessageTests
         Guid id = Guid.CreateVersion7();
         byte[] payload = [];
         int maxDeliveryAttempts = 1;
+        FakeTimeProvider timeProvider = new FakeTimeProvider();
         
         // Act
-        Message actual = Message.Create(id, payload, maxDeliveryAttempts);
+        Message actual = Message.Create(id, payload, maxDeliveryAttempts, timeProvider);
         
         // Assert
         actual.ShouldNotBeNull();
         actual.Id.ShouldBe(id);
         actual.Payload.ShouldBe(payload);
         actual.State.ShouldBe(MessageState.Created);
-        actual.CreatedAt.ShouldBeLessThanOrEqualTo(DateTimeOffset.UtcNow);
-        actual.CreatedAt.ShouldBeGreaterThanOrEqualTo(DateTimeOffset.UtcNow - TimeSpan.FromSeconds(1));
+        actual.CreatedAt.ShouldBe(timeProvider.GetUtcNow());
         actual.LastSentAt.ShouldBeNull();
         actual.DeliveryCount.ShouldBe(0);
         actual.MaxDeliveryAttempts.ShouldBe(maxDeliveryAttempts);
@@ -64,7 +82,8 @@ public class MessageTests
     public void TryEnqueue_TransitionsToEnqueued_WhenMessageIsCreated()
     {
         // Arrange
-        Message sut = Message.Create(Guid.CreateVersion7(), [], 1);
+        FakeTimeProvider timeProvider = new FakeTimeProvider();
+        Message sut = Message.Create(Guid.CreateVersion7(), [], 1, timeProvider);
         
         // Act
         bool actual = sut.TryEnqueue();
@@ -78,9 +97,10 @@ public class MessageTests
     public void TryEnqueue_TransitionsToEnqueued_WhenMessageIsSentAndMaxDeliveryAttemptsIsNotReached()
     {
         // Arrange
-        Message sut = Message.Create(Guid.CreateVersion7(), [], 2);
+        FakeTimeProvider timeProvider = new FakeTimeProvider();
+        Message sut = Message.Create(Guid.CreateVersion7(), [], 2, timeProvider);
         sut.TryEnqueue();
-        sut.TrySend();
+        sut.TrySend(timeProvider);
         
         // Act
         bool actual = sut.TryEnqueue();
@@ -94,7 +114,8 @@ public class MessageTests
     public void TryEnqueue_ReturnsFalse_WhenMessageIsAlreadyEnqueued()
     {
         // Arrange
-        Message sut = Message.Create(Guid.CreateVersion7(), [], 1);
+        FakeTimeProvider timeProvider = new FakeTimeProvider();
+        Message sut = Message.Create(Guid.CreateVersion7(), [], 1, timeProvider);
         sut.TryEnqueue();
         
         // Act
@@ -108,9 +129,10 @@ public class MessageTests
     public void TryEnqueue_TransitionsToFailed_WhenMaxDeliveryAttemptsIsReached()
     {
         // Arrange
-        Message sut = Message.Create(Guid.CreateVersion7(), [], 1);
+        FakeTimeProvider timeProvider = new FakeTimeProvider();
+        Message sut = Message.Create(Guid.CreateVersion7(), [], 1, timeProvider);
         sut.TryEnqueue();
-        sut.TrySend();
+        sut.TrySend(timeProvider);
         
         // Act
         bool actual = sut.TryEnqueue();
@@ -124,29 +146,44 @@ public class MessageTests
     public void TrySend_TransitionsToSent_WhenMessageIsEnqueued()
     {
         // Arrange
-        Message sut = Message.Create(Guid.CreateVersion7(), [], 1);
+        FakeTimeProvider timeProvider = new FakeTimeProvider();
+        Message sut = Message.Create(Guid.CreateVersion7(), [], 1, timeProvider);
         sut.TryEnqueue();
         
         // Act
-        bool actual = sut.TrySend();
+        bool actual = sut.TrySend(timeProvider);
         
         // Assert
         actual.ShouldBeTrue();
         sut.State.ShouldBe(MessageState.Sent);
         sut.LastSentAt.ShouldNotBeNull();
-        sut.LastSentAt.Value.ShouldBeLessThanOrEqualTo(DateTimeOffset.UtcNow);
-        sut.LastSentAt.Value.ShouldBeGreaterThanOrEqualTo(DateTimeOffset.UtcNow - TimeSpan.FromSeconds(1));
+        sut.LastSentAt.Value.ShouldBe(timeProvider.GetUtcNow());
         sut.DeliveryCount.ShouldBe(1);
+    }
+
+    [Fact]
+    public void TrySend_ThrowsException_WhenTimeProviderIsNull()
+    {
+        // Arrange
+        FakeTimeProvider timeProvider = new FakeTimeProvider();
+        Message sut = Message.Create(Guid.CreateVersion7(), [], 1, timeProvider);
+        
+        // Act
+        Action actual = () => sut.TrySend(null!);
+        
+        //  Assert
+        actual.ShouldThrow<ArgumentNullException>();
     }
 
     [Fact]
     public void TrySend_ReturnsFalse_WhenMessageIsNotEnqueued()
     {
         // Arrange
-        Message sut = Message.Create(Guid.CreateVersion7(), [], 1);
+        FakeTimeProvider timeProvider = new FakeTimeProvider();
+        Message sut = Message.Create(Guid.CreateVersion7(), [], 1, timeProvider);
         
         // Act
-        bool actual = sut.TrySend();
+        bool actual = sut.TrySend(timeProvider);
         
         // Assert
         actual.ShouldBeFalse();
@@ -159,9 +196,10 @@ public class MessageTests
     public void TryMarkDelivered_TransitionsToDelivered_WhenMessageIsSent()
     {
         // Arrange
-        Message sut = Message.Create(Guid.CreateVersion7(), [], 1);
+        FakeTimeProvider timeProvider = new FakeTimeProvider();
+        Message sut = Message.Create(Guid.CreateVersion7(), [], 1, timeProvider);
         sut.TryEnqueue();
-        sut.TrySend();
+        sut.TrySend(timeProvider);
         
         // Act
         bool actual = sut.TryMarkDelivered();
@@ -175,7 +213,8 @@ public class MessageTests
     public void TryMarkDelivered_ReturnsFalse_WhenMessageIsNotSent()
     {
         // Arrange
-        Message sut = Message.Create(Guid.CreateVersion7(), [], 1);
+        FakeTimeProvider timeProvider = new FakeTimeProvider();
+        Message sut = Message.Create(Guid.CreateVersion7(), [], 1, timeProvider);
         sut.TryEnqueue();
         
         // Act
