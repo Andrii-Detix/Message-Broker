@@ -16,17 +16,21 @@ public class MessageQueue : IMessageQueue
     private readonly ConcurrentQueue<Message> _consumeQueue = [];
     private readonly ConcurrentDictionary<Guid, Message> _inFlight = [];
     private readonly int _maxSwapCount;
+    private readonly TimeProvider _timeProvider;
 
     private int _count = 0;
 
-    public MessageQueue(int maxSwapCount)
+    public MessageQueue(int maxSwapCount, TimeProvider timeProvider)
     {
+        ArgumentNullException.ThrowIfNull(timeProvider);
+        
         if (maxSwapCount < 1)
         {
             throw new MaxSwapCountInvalidException();
         }
 
         _maxSwapCount = maxSwapCount;
+        _timeProvider = timeProvider;
     }
 
     public int Count => _count;
@@ -66,7 +70,7 @@ public class MessageQueue : IMessageQueue
             }
         }
 
-        message.TrySend();
+        message.TrySend(_timeProvider);
         _inFlight.TryAdd(message.Id, message);
 
         Interlocked.Decrement(ref _count);

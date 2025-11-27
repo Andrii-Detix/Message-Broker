@@ -36,8 +36,10 @@ public class Message
 
     public int MaxDeliveryAttempts { get; }
 
-    public static Message Create(Guid id, byte[] payload, int maxDeliveryAttempts)
+    public static Message Create(Guid id, byte[] payload, int maxDeliveryAttempts, TimeProvider timeProvider)
     {
+        ArgumentNullException.ThrowIfNull(timeProvider);
+        
         if (payload is null)
         {
             throw new PayloadNullReferenceException();
@@ -52,7 +54,7 @@ public class Message
             id,
             payload,
             MessageState.Created,
-            DateTimeOffset.UtcNow,
+            timeProvider.GetUtcNow(),
             null,
             0,
             maxDeliveryAttempts);
@@ -76,15 +78,17 @@ public class Message
         return true;
     }
 
-    public bool TrySend()
+    public bool TrySend(TimeProvider timeProvider)
     {
+        ArgumentNullException.ThrowIfNull(timeProvider);
+        
         if (State != MessageState.Enqueued)
         {
             return false;
         }
 
         State = MessageState.Sent;
-        LastSentAt = DateTimeOffset.UtcNow;
+        LastSentAt = timeProvider.GetUtcNow();
         DeliveryCount++;
 
         return true;
