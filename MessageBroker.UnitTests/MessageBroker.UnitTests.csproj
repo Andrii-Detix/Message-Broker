@@ -23,6 +23,7 @@
 
     <ItemGroup>
       <ProjectReference Include="..\MessageBroker.Core\MessageBroker.Core.csproj" />
+      <ProjectReference Include="..\MessageBroker.Persistence\MessageBroker.Persistence.csproj" />
     </ItemGroup>
 
 </Project>
