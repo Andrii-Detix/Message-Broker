@@ -11,7 +11,6 @@
         <PackageReference Include="coverlet.collector" />
         <PackageReference Include="Microsoft.Extensions.TimeProvider.Testing" />
         <PackageReference Include="Microsoft.NET.Test.Sdk" />
-        <PackageReference Include="Moq" />
         <PackageReference Include="Shouldly" />
         <PackageReference Include="xunit" />
         <PackageReference Include="xunit.runner.visualstudio" />
@@ -22,7 +21,6 @@
     </ItemGroup>
 
     <ItemGroup>
-      <ProjectReference Include="..\MessageBroker.Core\MessageBroker.Core.csproj" />
       <ProjectReference Include="..\MessageBroker.Persistence\MessageBroker.Persistence.csproj" />
     </ItemGroup>
 

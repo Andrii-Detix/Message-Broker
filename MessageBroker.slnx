@@ -7,8 +7,10 @@
   </Folder>
   <Folder Name="/src/">
     <Project Path="MessageBroker.Core/MessageBroker.Core.csproj" />
+    <Project Path="MessageBroker.Persistence/MessageBroker.Persistence.csproj" />
   </Folder>
   <Folder Name="/tests/">
+    <Project Path="MessageBroker.IntegrationTests/MessageBroker.IntegrationTests.csproj" />
     <Project Path="MessageBroker.UnitTests/MessageBroker.UnitTests.csproj" />
   </Folder>
 </Solution>
