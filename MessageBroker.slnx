@@ -7,6 +7,7 @@
   </Folder>
   <Folder Name="/src/">
     <Project Path="MessageBroker.Core/MessageBroker.Core.csproj" />
+    <Project Path="MessageBroker.Engine/MessageBroker.Engine.csproj" />
     <Project Path="MessageBroker.Persistence/MessageBroker.Persistence.csproj" />
   </Folder>
   <Folder Name="/tests/">
