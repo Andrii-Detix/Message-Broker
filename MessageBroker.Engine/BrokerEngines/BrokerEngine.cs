@@ -3,13 +3,17 @@ using MessageBroker.Core.Messages.Exceptions;
 using MessageBroker.Core.Messages.Models;
 using MessageBroker.Engine.Abstractions;
 using MessageBroker.Engine.BrokerEngines.Exceptions;
+using MessageBroker.Engine.Common.Exceptions;
 using MessageBroker.Persistence.Abstractions;
+using MessageBroker.Persistence.Events;
 using Microsoft.Extensions.Logging;
 
 namespace MessageBroker.Engine.BrokerEngines;
 
 public class BrokerEngine : IBrokerEngine
 {
+    private readonly Lock _publishLocker = new();
+    
     private readonly IMessageQueue _messageQueue;
     private readonly IWriteAheadLog _wal;
     private readonly TimeProvider _timeProvider;
@@ -50,7 +54,44 @@ public class BrokerEngine : IBrokerEngine
     
     public void Publish(byte[] payload)
     {
-        throw new NotImplementedException();
+        ArgumentNullException.ThrowIfNull(payload);
+
+        int payloadSize = payload.Length;
+        if (payloadSize > _maxPayloadLength)
+        {
+            throw new PayloadTooLargeException(payloadSize, _maxPayloadLength);
+        }
+
+        Message message = Message.Create(
+            Guid.CreateVersion7(),
+            payload,
+            _maxDeliveryAttempts,
+            _timeProvider);
+
+        EnqueueWalEvent enqueueEvent = new(message.Id, message.Payload);
+
+        bool enqueueSuccess;
+        
+        lock (_publishLocker)
+        {
+            bool walSuccess = _wal.Append(enqueueEvent);
+
+            if (!walSuccess)
+            {
+                throw new BrokerStorageException();
+            }
+            
+            enqueueSuccess = _messageQueue.TryEnqueue(message);
+        }
+        
+        if (!enqueueSuccess)
+        {
+            DeadWalEvent deadEvent = new(message.Id);
+            
+            _wal.Append(deadEvent);
+
+            throw new MessageQueueEnqueueException();
+        }
     }
 
     public Message? Consume()

@@ -1,8 +1,12 @@
-﻿using MessageBroker.Core.Abstractions;
+﻿using System.Collections.Concurrent;
+using MessageBroker.Core.Abstractions;
 using MessageBroker.Core.Messages.Exceptions;
+using MessageBroker.Core.Messages.Models;
 using MessageBroker.Engine.BrokerEngines;
 using MessageBroker.Engine.BrokerEngines.Exceptions;
+using MessageBroker.Engine.Common.Exceptions;
 using MessageBroker.Persistence.Abstractions;
+using MessageBroker.Persistence.Events;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Time.Testing;
 using Moq;
@@ -184,5 +188,162 @@ public class BrokerEngineTests
         
         // Assert
         actual.ShouldNotBeNull();
+    }
+    
+    [Fact]
+    public void Publish_ThrowsException_WhenPayloadIsNull()
+    {
+        // Arrange
+        FakeTimeProvider timeProvider = new();
+        IMessageQueue queue = _queueMock.Object;
+        IWriteAheadLog wal = _walMock.Object;
+        int maxPayloadLength = 5;
+        int maxDeliveryAttempts = 5;
+        BrokerEngine sut = new(queue, wal, timeProvider, maxPayloadLength, maxDeliveryAttempts);
+        
+        // Act
+        Action actual = () => sut.Publish(null!);
+        
+        // Assert
+        actual.ShouldThrow<ArgumentNullException>();
+    }
+
+    [Fact]
+    public void Publish_ThrowsException_WhenPayloadSizeIsTooLarge()
+    {
+        // Arrange
+        FakeTimeProvider timeProvider = new();
+        IMessageQueue queue = _queueMock.Object;
+        IWriteAheadLog wal = _walMock.Object;
+        int maxPayloadLength = 1;
+        int maxDeliveryAttempts = 5;
+        BrokerEngine sut = new(queue, wal, timeProvider, maxPayloadLength, maxDeliveryAttempts);
+        
+        // Act
+        Action actual = () => sut.Publish([0x01, 0x02]);
+        
+        // Assert
+        actual.ShouldThrow<PayloadTooLargeException>();
+    }
+
+    [Fact]
+    public void Publish_ThrowsException_WhenFailureHasOccurredDuringStoringEnqueueEvent()
+    {
+        // Arrange
+        _walMock.Setup(w => w.Append(It.IsAny<WalEvent>()))
+            .Returns(false);
+        _queueMock.Setup(q => q.TryEnqueue(It.IsAny<Message>()))
+            .Returns(true);
+        
+        FakeTimeProvider timeProvider = new();
+        int maxPayloadLength = 5;
+        int maxDeliveryAttempts = 5;
+        IMessageQueue queue = _queueMock.Object;
+        IWriteAheadLog wal = _walMock.Object;
+        BrokerEngine sut = new(queue, wal, timeProvider, maxPayloadLength, maxDeliveryAttempts);
+        
+        // Act
+        Action actual = () => sut.Publish([0x01, 0x02]);
+        
+        // Assert
+        actual.ShouldThrow<BrokerStorageException>();
+    }
+
+    [Fact]
+    public void Publish_AppendsCompensatingDeadEvent_WhenFailureHasOccurredDuringAppendingEnqueueEvent()
+    {
+        // Arrange
+        _walMock.Setup(w => w.Append(It.IsAny<WalEvent>()))
+            .Returns(true);
+        _queueMock.Setup(q => q.TryEnqueue(It.IsAny<Message>()))
+            .Returns(false);
+        
+        FakeTimeProvider timeProvider = new();
+        int maxPayloadLength = 5;
+        int maxDeliveryAttempts = 5;
+        IMessageQueue queue = _queueMock.Object;
+        IWriteAheadLog wal = _walMock.Object;
+        BrokerEngine sut = new(queue, wal, timeProvider, maxPayloadLength, maxDeliveryAttempts);
+        
+        // Act
+        Action actual = () => sut.Publish([0x01, 0x02]);
+        
+        // Assert
+        actual.ShouldThrow<MessageQueueEnqueueException>();
+        _walMock.Verify(w => w.Append(It.IsAny<DeadWalEvent>()), Times.Once);
+    }
+
+    [Fact]
+    public void Publish_AppendsEnqueueEventAndEnqueuesMessage_WhenNoErrorHasOccurredDuringPublishing()
+    {
+        // Arrange
+        EnqueueWalEvent? capturedEvent = null;
+        Message? capturedMessage = null;
+        
+        _walMock.Setup(w => w.Append(It.IsAny<EnqueueWalEvent>()))
+            .Callback<WalEvent>(evt => capturedEvent = evt as EnqueueWalEvent)
+            .Returns(true);
+        _queueMock.Setup(q => q.TryEnqueue(It.IsAny<Message>()))
+            .Callback<Message>(message => capturedMessage = message)
+            .Returns(true);
+        
+        FakeTimeProvider timeProvider = new();
+        int maxPayloadLength = 5;
+        int maxDeliveryAttempts = 5;
+        IMessageQueue queue = _queueMock.Object;
+        IWriteAheadLog wal = _walMock.Object;
+        BrokerEngine sut = new(queue, wal, timeProvider, maxPayloadLength, maxDeliveryAttempts);
+        
+        // Act
+        sut.Publish([0x01, 0x02]);
+        
+        // Assert
+        capturedEvent.ShouldNotBeNull();
+        capturedMessage.ShouldNotBeNull();
+        capturedEvent.Payload.ShouldBe([0x01, 0x02]);
+        capturedMessage.Payload.ShouldBe([0x01, 0x02]);
+        capturedEvent.MessageId.ShouldBe(capturedMessage.Id);
+        
+        _walMock.Verify(w => w.Append(It.IsAny<EnqueueWalEvent>()), Times.Once);
+        _queueMock.Verify(q => q.TryEnqueue(It.IsAny<Message>()), Times.Once);
+    }
+
+    [Fact]
+    public void Publish_StoresEventsAndEnqueuesMessagesInTheSameOrder_WhenPublishMessagesConcurrently()
+    {
+        // Arrange
+        ConcurrentQueue<Guid> walMessageIds = [];
+        ConcurrentQueue<Guid> queueMessageIds = [];
+        
+        _walMock.Setup(w => w.Append(It.IsAny<EnqueueWalEvent>()))
+            .Callback<WalEvent>(evt => walMessageIds.Enqueue((evt as EnqueueWalEvent)!.MessageId))
+            .Returns(true);
+        _queueMock.Setup(q => q.TryEnqueue(It.IsAny<Message>()))
+            .Callback<Message>(message => queueMessageIds.Enqueue(message.Id))
+            .Returns(true);
+        
+        FakeTimeProvider timeProvider = new();
+        int maxPayloadLength = 5;
+        int maxDeliveryAttempts = 5;
+        IMessageQueue queue = _queueMock.Object;
+        IWriteAheadLog wal = _walMock.Object;
+        BrokerEngine sut = new(queue, wal, timeProvider, maxPayloadLength, maxDeliveryAttempts);
+
+        int threadCount = 1000;
+        int publishesPerThread = 100;
+
+        // Act
+        Parallel.For(0, threadCount, _ =>
+        {
+            for (int i = 0; i < publishesPerThread; i++)
+            {
+                sut.Publish([0x01, 0x02]);
+            }
+        });
+        
+        // Assert
+        walMessageIds.Count.ShouldBe(threadCount * publishesPerThread);
+        queueMessageIds.Count.ShouldBe(threadCount * publishesPerThread);
+        walMessageIds.ShouldBe(queueMessageIds, ignoreOrder: false);
     }
 }
