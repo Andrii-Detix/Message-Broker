@@ -346,4 +346,51 @@ public class BrokerEngineTests
         queueMessageIds.Count.ShouldBe(threadCount * publishesPerThread);
         walMessageIds.ShouldBe(queueMessageIds, ignoreOrder: false);
     }
+
+    [Fact]
+    public void Consume_ReturnsMessage_WhenQueueIsNotEmpty()
+    {
+        // Arrange
+        FakeTimeProvider timeProvider = new();
+        Message? expectedMessage = Message.Create(Guid.CreateVersion7(), [], 1, timeProvider);
+        
+        _queueMock.Setup(q => q.TryConsume(out expectedMessage))
+            .Returns(true);
+        
+        int maxPayloadLength = 5;
+        int maxDeliveryAttempts = 5;
+        IMessageQueue queue = _queueMock.Object;
+        IWriteAheadLog wal = _walMock.Object;
+        BrokerEngine sut = new(queue, wal, timeProvider, maxPayloadLength, maxDeliveryAttempts);
+        
+        // Act
+        Message? actual = sut.Consume();
+        
+        // Assert
+        actual.ShouldNotBeNull();
+        actual.ShouldBe(expectedMessage);
+    }
+    
+    [Fact]
+    public void Consume_ReturnsNull_WhenQueueIsEmpty()
+    {
+        // Arrange
+        Message? expectedMessage = null;
+        
+        _queueMock.Setup(q => q.TryConsume(out expectedMessage))
+            .Returns(false);
+        
+        FakeTimeProvider timeProvider = new();
+        int maxPayloadLength = 5;
+        int maxDeliveryAttempts = 5;
+        IMessageQueue queue = _queueMock.Object;
+        IWriteAheadLog wal = _walMock.Object;
+        BrokerEngine sut = new(queue, wal, timeProvider, maxPayloadLength, maxDeliveryAttempts);
+        
+        // Act
+        Message? actual = sut.Consume();
+        
+        // Assert
+        actual.ShouldBeNull();
+    }
 }

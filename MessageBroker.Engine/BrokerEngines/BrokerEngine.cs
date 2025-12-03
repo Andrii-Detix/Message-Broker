@@ -96,7 +96,12 @@ public class BrokerEngine : IBrokerEngine
 
     public Message? Consume()
     {
-        throw new NotImplementedException();
+        if (_messageQueue.TryConsume(out var message))
+        {
+            return message;
+        }
+        
+        return null;
     }
 
     public void Ack(Guid messageId)
