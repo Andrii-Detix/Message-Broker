@@ -82,14 +82,14 @@ public class RequeueBackgroundServiceTests
     public async Task ExecuteAsync_CallsRequeueServicePeriodically_WhenRunning()
     {
         // Arrange
-        TimeSpan checkInterval = TimeSpan.FromMilliseconds(30);
+        TimeSpan checkInterval = TimeSpan.FromMilliseconds(10);
         IRequeueService requeueService = _requeueServiceMock.Object;
         using RequeueBackgroundService sut = new(requeueService, checkInterval);
         
         // Act
         await sut.StartAsync(CancellationToken.None);
         
-        await Task.Delay(TimeSpan.FromMilliseconds(150));
+        await Task.Delay(TimeSpan.FromMilliseconds(300));
         
         await sut.StopAsync(CancellationToken.None);
         
@@ -104,14 +104,14 @@ public class RequeueBackgroundServiceTests
         _requeueServiceMock.Setup(r => r.Requeue())
             .Throws(new Exception());
         
-        TimeSpan checkInterval = TimeSpan.FromMilliseconds(30);
+        TimeSpan checkInterval = TimeSpan.FromMilliseconds(10);
         IRequeueService requeueService = _requeueServiceMock.Object;
         using RequeueBackgroundService sut = new(requeueService, checkInterval);
         
         // Act
         await sut.StartAsync(CancellationToken.None);
         
-        await Task.Delay(TimeSpan.FromMilliseconds(150));
+        await Task.Delay(TimeSpan.FromMilliseconds(300));
         
         await sut.StopAsync(CancellationToken.None);
         
