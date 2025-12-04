@@ -106,6 +106,18 @@ public class BrokerEngine : IBrokerEngine
 
     public void Ack(Guid messageId)
     {
-        throw new NotImplementedException();
+        AckWalEvent ackEvent = new(messageId);
+
+        if (!_wal.Append(ackEvent))
+        {
+            throw new BrokerStorageException();
+        }
+        
+        Message? message = _messageQueue.Ack(messageId);
+
+        if (message is null)
+        {
+            throw new SentMessageNotFoundException(messageId);
+        }
     }
 }

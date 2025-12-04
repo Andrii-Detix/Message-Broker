@@ -393,4 +393,79 @@ public class BrokerEngineTests
         // Assert
         actual.ShouldBeNull();
     }
+
+    [Fact]
+    public void Ack_ThrowsException_WhenFailureHasOccurredDuringAppendingAckEvent()
+    {
+        // Arrange
+        _walMock.Setup(w => w.Append(It.IsAny<AckWalEvent>()))
+            .Returns(false);
+        
+        FakeTimeProvider timeProvider = new();
+        int maxPayloadLength = 5;
+        int maxDeliveryAttempts = 5;
+        IMessageQueue queue = _queueMock.Object;
+        IWriteAheadLog wal = _walMock.Object;
+        BrokerEngine sut = new(queue, wal, timeProvider, maxPayloadLength, maxDeliveryAttempts);
+        
+        Guid messageId = Guid.CreateVersion7();
+        
+        // Act
+        Action actual = () => sut.Ack(messageId);
+        
+        // Assert
+        actual.ShouldThrow<BrokerStorageException>();
+        
+        _queueMock.Verify(q => q.Ack(messageId), Times.Never);
+    }
+
+    [Fact]
+    public void Ack_ThrowsException_WhenThereIsNoInFlightMessageWithInputId()
+    {
+        // Arrange
+        _walMock.Setup(w => w.Append(It.IsAny<AckWalEvent>()))
+            .Returns(true);
+        _queueMock.Setup(q => q.Ack(It.IsAny<Guid>()))
+            .Returns((Message?)null);
+        
+        FakeTimeProvider timeProvider = new();
+        int maxPayloadLength = 5;
+        int maxDeliveryAttempts = 5;
+        IMessageQueue queue = _queueMock.Object;
+        IWriteAheadLog wal = _walMock.Object;
+        BrokerEngine sut = new(queue, wal, timeProvider, maxPayloadLength, maxDeliveryAttempts);
+        
+        // Act
+        Action actual = () => sut.Ack(Guid.CreateVersion7());
+        
+        // Assert
+        actual.ShouldThrow<SentMessageNotFoundException>();
+    }
+    
+    [Fact]
+    public void Ack_AppendsAckEventAndAcknowledgesMessage_WhenInFlightMessageWithInputIdExists()
+    {
+        // Arrange
+        FakeTimeProvider timeProvider = new();
+        Guid messageId = Guid.CreateVersion7();
+        Message message = Message.Create(messageId, [], 1, timeProvider);
+        
+        _walMock.Setup(w => w.Append(It.IsAny<AckWalEvent>()))
+            .Returns(true);
+        _queueMock.Setup(q => q.Ack(messageId))
+            .Returns(message);
+        
+        int maxPayloadLength = 5;
+        int maxDeliveryAttempts = 5;
+        IMessageQueue queue = _queueMock.Object;
+        IWriteAheadLog wal = _walMock.Object;
+        BrokerEngine sut = new(queue, wal, timeProvider, maxPayloadLength, maxDeliveryAttempts);
+        
+        // Act
+        sut.Ack(messageId);
+        
+        // Assert
+        _walMock.Verify(w => w.Append(It.Is<AckWalEvent>(e => e.MessageId == messageId)), Times.Once);
+        _queueMock.Verify(q => q.Ack(messageId), Times.Once);
+    }
 }
