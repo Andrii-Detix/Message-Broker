@@ -6,8 +6,6 @@ using MessageBroker.Engine.BrokerEngines.Exceptions;
 using MessageBroker.Engine.Common.Exceptions;
 using MessageBroker.Persistence.Abstractions;
 using MessageBroker.Persistence.Events;
-using Microsoft.Extensions.Logging;
-
 namespace MessageBroker.Engine.BrokerEngines;
 
 public class BrokerEngine : IBrokerEngine
@@ -20,15 +18,12 @@ public class BrokerEngine : IBrokerEngine
     private readonly int _maxPayloadLength;
     private readonly int _maxDeliveryAttempts;
 
-    private readonly ILogger<BrokerEngine>? _logger;
-
     public BrokerEngine(
         IMessageQueue? messageQueue,
         IWriteAheadLog? wal,
         TimeProvider? timeProvider,
         int maxPayloadLength,
-        int maxDeliveryAttempts,
-        ILogger<BrokerEngine>? logger = null)
+        int maxDeliveryAttempts)
     {
         ArgumentNullException.ThrowIfNull(messageQueue);
         ArgumentNullException.ThrowIfNull(wal);
@@ -49,7 +44,6 @@ public class BrokerEngine : IBrokerEngine
         _timeProvider = timeProvider;
         _maxPayloadLength = maxPayloadLength;
         _maxDeliveryAttempts = maxDeliveryAttempts;
-        _logger = logger;
     }
     
     public void Publish(byte[] payload)

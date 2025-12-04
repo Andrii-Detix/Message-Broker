@@ -7,7 +7,6 @@ using MessageBroker.Engine.BrokerEngines.Exceptions;
 using MessageBroker.Engine.Common.Exceptions;
 using MessageBroker.Persistence.Abstractions;
 using MessageBroker.Persistence.Events;
-using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Time.Testing;
 using Moq;
 using Shouldly;
@@ -18,13 +17,11 @@ public class BrokerEngineTests
 {
     private readonly Mock<IMessageQueue> _queueMock;
     private readonly Mock<IWriteAheadLog> _walMock;
-    private readonly Mock<ILogger<BrokerEngine>> _loggerMock;
 
     public BrokerEngineTests()
     {
         _queueMock = new Mock<IMessageQueue>();
         _walMock = new Mock<IWriteAheadLog>();
-        _loggerMock = new Mock<ILogger<BrokerEngine>>();
     }
     
     [Fact]
@@ -33,7 +30,6 @@ public class BrokerEngineTests
         // Arrange
         FakeTimeProvider timeProvider = new();
         IWriteAheadLog wal = _walMock.Object;
-        ILogger<BrokerEngine> logger = _loggerMock.Object;
         int maxPayloadLength = 5;
         int maxDeliveryAttempts = 5;
         
@@ -43,8 +39,7 @@ public class BrokerEngineTests
             wal, 
             timeProvider, 
             maxPayloadLength, 
-            maxDeliveryAttempts, 
-            logger);
+            maxDeliveryAttempts);
         
         // Assert
         actual.ShouldThrow<ArgumentNullException>();
@@ -56,7 +51,6 @@ public class BrokerEngineTests
         // Arrange
         FakeTimeProvider timeProvider = new();
         IMessageQueue queue = _queueMock.Object;
-        ILogger<BrokerEngine> logger = _loggerMock.Object;
         int maxPayloadLength = 5;
         int maxDeliveryAttempts = 5;
         
@@ -66,8 +60,7 @@ public class BrokerEngineTests
             null,
             timeProvider,
             maxPayloadLength,
-            maxDeliveryAttempts,
-            logger);
+            maxDeliveryAttempts);
         
         // Assert
         actual.ShouldThrow<ArgumentNullException>();
@@ -79,7 +72,6 @@ public class BrokerEngineTests
         // Arrange
         IMessageQueue queue = _queueMock.Object;
         IWriteAheadLog wal = _walMock.Object;
-        ILogger<BrokerEngine> logger = _loggerMock.Object;
         int maxPayloadLength = 5;
         int maxDeliveryAttempts = 5;
         
@@ -89,8 +81,7 @@ public class BrokerEngineTests
             wal,
             null,
             maxPayloadLength,
-            maxDeliveryAttempts,
-            logger);
+            maxDeliveryAttempts);
         
         // Assert
         actual.ShouldThrow<ArgumentNullException>();
@@ -103,7 +94,6 @@ public class BrokerEngineTests
         FakeTimeProvider timeProvider = new();
         IMessageQueue queue = _queueMock.Object;
         IWriteAheadLog wal = _walMock.Object;
-        ILogger<BrokerEngine> logger = _loggerMock.Object;
         int maxDeliveryAttempts = 5;
         
         // Act
@@ -112,8 +102,7 @@ public class BrokerEngineTests
             wal,
             timeProvider,
             -1,
-            maxDeliveryAttempts,
-            logger);
+            maxDeliveryAttempts);
         
         // Assert
         actual.ShouldThrow<MaxPayloadLengthNegativeException>();
@@ -128,7 +117,6 @@ public class BrokerEngineTests
         FakeTimeProvider timeProvider = new();
         IMessageQueue queue = _queueMock.Object;
         IWriteAheadLog wal = _walMock.Object;
-        ILogger<BrokerEngine> logger = _loggerMock.Object;
         int maxPayloadLength = 5;
         
         // Act
@@ -137,8 +125,7 @@ public class BrokerEngineTests
             wal,
             timeProvider,
             maxPayloadLength,
-            maxDeliveryAttempts,
-            logger);
+            maxDeliveryAttempts);
 
         // Assert
         actual.ShouldThrow<MaxDeliveryAttemptsInvalidException>();
@@ -146,30 +133,6 @@ public class BrokerEngineTests
     
     [Fact]
     public void Constructor_CreatesBrokerEngine_WhenInputDataIsValid()
-    {
-        // Arrange
-        FakeTimeProvider timeProvider = new();
-        IMessageQueue queue = _queueMock.Object;
-        IWriteAheadLog wal = _walMock.Object;
-        ILogger<BrokerEngine> logger = _loggerMock.Object;
-        int maxPayloadLength = 5;
-        int maxDeliveryAttempts = 5;
-        
-        // Act
-        BrokerEngine actual = new BrokerEngine(
-            queue,
-            wal,
-            timeProvider,
-            maxPayloadLength,
-            maxDeliveryAttempts,
-            logger);
-        
-        // Assert
-        actual.ShouldNotBeNull();
-    }
-    
-    [Fact]
-    public void Constructor_CreatesBrokerEngine_WithoutProvidedLogger()
     {
         // Arrange
         FakeTimeProvider timeProvider = new();
