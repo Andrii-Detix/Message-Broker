@@ -110,7 +110,10 @@ public class Message
 
     public bool TryEnqueue()
     {
-        if (State != MessageState.Created && State != MessageState.Sent)
+        if (State is not (
+            MessageState.Created
+            or MessageState.Restored
+            or MessageState.Sent))
         {
             return false;
         }

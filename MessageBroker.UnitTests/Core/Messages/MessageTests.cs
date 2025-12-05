@@ -245,6 +245,28 @@ public class MessageTests
     }
 
     [Fact]
+    public void TryEnqueue_TransitionsToEnqueued_WhenMessageIsRestored()
+    {
+        // Arrange
+        FakeTimeProvider timeProvider = new();
+        Message sut = Message.Restore(
+            Guid.CreateVersion7(),
+            [],
+            MessageState.Restored,
+            timeProvider.GetUtcNow(), 
+            null, 
+            0, 
+            5);
+        
+        // Act
+        bool actual = sut.TryEnqueue();
+        
+        // Assert
+        actual.ShouldBeTrue();
+        sut.State.ShouldBe(MessageState.Enqueued);
+    }
+
+    [Fact]
     public void TryEnqueue_TransitionsToEnqueued_WhenMessageIsSentAndMaxDeliveryAttemptsIsNotReached()
     {
         // Arrange
