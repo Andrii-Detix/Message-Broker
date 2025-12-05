@@ -3,6 +3,7 @@
 public enum MessageState
 {
     Created,
+    Restored,
     Enqueued,
     Sent,
     Delivered,
