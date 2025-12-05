@@ -26,12 +26,10 @@ public class EnqueueWalReader : AbstractWalReader<EnqueueWalEvent>
             return false;
         }
 
-        WalEventType type = (WalEventType)reader.ReadInt32();
-
         byte[] buffer = reader.ReadBytes(guidSize);
         Guid messageId = new Guid(buffer);
 
-        int payloadLength = restLength - intSize - guidSize;
+        int payloadLength = restLength - guidSize;
         buffer = reader.ReadBytes(payloadLength);
 
         evt = new EnqueueWalEvent(messageId, buffer);
