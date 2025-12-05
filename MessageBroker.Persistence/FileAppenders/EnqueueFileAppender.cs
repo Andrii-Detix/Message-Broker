@@ -13,8 +13,8 @@ public class EnqueueFileAppender(
     {
         int payloadLength = evt.Payload.Length;
         
-        // Format: record_length (4) | event_type_id (4) | message_id (16) | payload (n-bytes)
-        int length = 4 + 4 + 16 + payloadLength;
+        // Format: record_length (4) | message_id (16) | payload (n-bytes)
+        int length = 4 + 16 + payloadLength;
 
         byte[] bufferArray = new byte[length];
         Span<byte> buffer = bufferArray;
@@ -22,14 +22,11 @@ public class EnqueueFileAppender(
         // record_length (4)
         BinaryPrimitives.WriteInt32LittleEndian(buffer.Slice(0, 4), length);
         
-        // event_type_id (4)
-        BinaryPrimitives.WriteInt32LittleEndian(buffer.Slice(4, 4), (int)evt.EventType);
-        
         // message_id (16)
-        evt.MessageId.TryWriteBytes(buffer.Slice(8, 16));
+        evt.MessageId.TryWriteBytes(buffer.Slice(4, 16));
         
         // payload (n-bytes)
-        evt.Payload.CopyTo(buffer.Slice(24));
+        evt.Payload.CopyTo(buffer.Slice(20));
         
         SaveData(buffer);
     }

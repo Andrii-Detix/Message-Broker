@@ -26,7 +26,7 @@ public class EnqueueFileAppenderTests : IDisposable
         EnqueueFileAppender sut = new(pathCreator, 2);
         EnqueueWalEvent evt = new(Guid.CreateVersion7(), [0x01, 0x02]);
 
-        int expectedLength = 26; // record_length (4) | event_type_id (4) | message_id (16) | payload (2)
+        int expectedLength = 22; // record_length (4) | message_id (16) | payload (2)
         
         // Act
         sut.Append(evt);
@@ -42,13 +42,10 @@ public class EnqueueFileAppenderTests : IDisposable
         int actualSize = BinaryPrimitives.ReadInt32LittleEndian(content.AsSpan(0, 4));
         actualSize.ShouldBe(expectedLength);
         
-        int actualType = BinaryPrimitives.ReadInt32LittleEndian(content.AsSpan(4, 4));
-        actualType.ShouldBe((int)WalEventType.Enqueue);
-        
-        Guid actualMessageId = new Guid(content.AsSpan(8, 16));
+        Guid actualMessageId = new Guid(content.AsSpan(4, 16));
         actualMessageId.ShouldBe(evt.MessageId);
 
-        byte[] actualPayload = content.AsSpan(24).ToArray();
+        byte[] actualPayload = content.AsSpan(20).ToArray();
         actualPayload.ShouldBe(evt.Payload);
     }
     
@@ -61,7 +58,7 @@ public class EnqueueFileAppenderTests : IDisposable
         EnqueueFileAppender sut = new(pathCreator, 2);
         EnqueueWalEvent evt = new(Guid.CreateVersion7(), []);
         
-        int expectedLength = 24; // record_length (4) | event_type_id (4) | message_id (16) | payload (0)
+        int expectedLength = 20; // record_length (4) | message_id (16) | payload (0)
         
         // Act
         sut.Append(evt);
@@ -77,10 +74,7 @@ public class EnqueueFileAppenderTests : IDisposable
         int actualSize = BinaryPrimitives.ReadInt32LittleEndian(content.AsSpan(0, 4));
         actualSize.ShouldBe(expectedLength);
         
-        int actualType = BinaryPrimitives.ReadInt32LittleEndian(content.AsSpan(4, 4));
-        actualType.ShouldBe((int)WalEventType.Enqueue);
-        
-        Guid actualMessageId = new Guid(content.AsSpan(8, 16));
+        Guid actualMessageId = new Guid(content.AsSpan(4, 16));
         actualMessageId.ShouldBe(evt.MessageId);
     }
     

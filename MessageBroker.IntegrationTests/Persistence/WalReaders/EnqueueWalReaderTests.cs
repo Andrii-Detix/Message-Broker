@@ -24,10 +24,8 @@ public class EnqueueWalReaderTests : IDisposable
 
         using (var writer = new BinaryWriter(File.OpenWrite(filePath)))
         {
-            // Length: 4 (size) + 4 (type) + 16 (id) + 3 (payload) = 27
-            writer.Write(27); 
-            // Type
-            writer.Write((int)WalEventType.Enqueue);
+            // Length: 4 (size) + 16 (id) + 3 (payload) = 23
+            writer.Write(23); 
             // Id
             writer.Write(messageId.ToByteArray());
             // Payload
@@ -57,10 +55,8 @@ public class EnqueueWalReaderTests : IDisposable
 
         using (var writer = new BinaryWriter(File.OpenWrite(filePath)))
         {
-            // Length: 4 (size) + 4 (type) + 16 (id) + 0 (payload) = 24
-            writer.Write(24); 
-            // Type
-            writer.Write((int)WalEventType.Enqueue);
+            // Length: 4 (size) + 16 (id) + 0 (payload) = 20
+            writer.Write(20); 
             // Id
             writer.Write(messageId.ToByteArray());
             // Payload
@@ -86,10 +82,8 @@ public class EnqueueWalReaderTests : IDisposable
 
         using (var writer = new BinaryWriter(File.OpenWrite(filePath)))
         {
-            // Length: 4 (size) + 4 (type) + 16 (id) + 3 (payload) = 27
-            writer.Write(27); 
-            // Type
-            writer.Write((int)WalEventType.Enqueue);
+            // Length: 4 (size) + 16 (id) + 3 (payload) = 23
+            writer.Write(23); 
             // Id
             writer.Write(messageId.ToByteArray());
             // Payload: write only 1 byte
@@ -119,13 +113,11 @@ public class EnqueueWalReaderTests : IDisposable
         
         using (var writer = new BinaryWriter(File.OpenWrite(filePath)))
         {
-            writer.Write(27); 
-            writer.Write((int)WalEventType.Enqueue);
+            writer.Write(23); 
             writer.Write(messageId1.ToByteArray());
             writer.Write(payload1);
             
-            writer.Write(26); 
-            writer.Write((int)WalEventType.Enqueue);
+            writer.Write(22);
             writer.Write(messageId2.ToByteArray());
             writer.Write(payload2);
         }
