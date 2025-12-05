@@ -60,9 +60,60 @@ public class Message
             maxDeliveryAttempts);
     }
 
+    public static Message Restore(
+        Guid id,
+        byte[] payload,
+        MessageState state,
+        DateTimeOffset createdAt,
+        DateTimeOffset? lastSentAt,
+        int deliveryCount,
+        int maxDeliveryAttempts)
+    {
+        if (payload is null)
+        {
+            throw new PayloadNullReferenceException();
+        }
+
+        if (maxDeliveryAttempts < 1)
+        {
+            throw new MaxDeliveryAttemptsInvalidException();
+        }
+
+        if (deliveryCount < 0)
+        {
+            throw new DeliveryCountInvalidException();
+        }
+
+        if (state is not (
+            MessageState.Restored
+            or MessageState.Delivered
+            or MessageState.Failed))
+        {
+            throw new InvalidRestoreMessageStateException();
+        }
+
+        if (deliveryCount >= maxDeliveryAttempts 
+            && state is not MessageState.Delivered)
+        {
+            state = MessageState.Failed;
+        }
+
+        return new(
+            id,
+            payload,
+            state,
+            createdAt,
+            lastSentAt,
+            deliveryCount,
+            maxDeliveryAttempts);
+    }
+
     public bool TryEnqueue()
     {
-        if (State != MessageState.Created && State != MessageState.Sent)
+        if (State is not (
+            MessageState.Created
+            or MessageState.Restored
+            or MessageState.Sent))
         {
             return false;
         }

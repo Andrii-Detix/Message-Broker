@@ -79,11 +79,184 @@ public class MessageTests
     }
 
     [Fact]
+    public void Restore_ThrowsException_WhenPayloadIsNull()
+    {
+        // Arrange
+        FakeTimeProvider timeProvider = new();
+        Guid id = Guid.CreateVersion7();
+        MessageState state = MessageState.Restored;
+        DateTimeOffset createdAt = timeProvider.GetUtcNow();
+        int deliveryCount = 0;
+        int maxDeliveryAttempts = 5;
+
+        // Act
+        Action actual = () => Message.Restore(
+            id, null!, state, createdAt, null, deliveryCount, maxDeliveryAttempts);
+
+        // Assert
+        actual.ShouldThrow<PayloadNullReferenceException>();
+    }
+
+    [Theory]
+    [InlineData(0)]
+    [InlineData(-1)]
+    public void Restore_ThrowsException_WhenMaxDeliveryAttemptsIsLessThanOne(int maxDeliveryAttempts)
+    {
+        // Arrange
+        FakeTimeProvider timeProvider = new();
+        Guid id = Guid.CreateVersion7();
+        byte[] payload = [];
+        MessageState state = MessageState.Restored;
+        DateTimeOffset createdAt = timeProvider.GetUtcNow();
+        int deliveryCount = 0;
+        
+        // Act
+        Action actual = () => Message.Restore(
+            id, payload, state, createdAt, null, deliveryCount, maxDeliveryAttempts);
+
+        // Assert
+        actual.ShouldThrow<MaxDeliveryAttemptsInvalidException>();
+    }
+    
+    [Fact]
+    public void Restore_ThrowsException_WhenDeliveryCountIsNegative()
+    {
+        // Arrange
+        FakeTimeProvider timeProvider = new();
+        Guid id = Guid.CreateVersion7();
+        byte[] payload = [];
+        MessageState state = MessageState.Restored;
+        DateTimeOffset createdAt = timeProvider.GetUtcNow();
+        int maxDeliveryAttempts = 5;
+        
+        // Act
+        Action actual = () => Message.Restore(
+            id, payload, state, createdAt, null, -1, maxDeliveryAttempts);
+
+        // Assert
+        actual.ShouldThrow<DeliveryCountInvalidException>();
+    }
+    
+    [Theory]
+    [InlineData(MessageState.Created)]
+    [InlineData(MessageState.Enqueued)]
+    [InlineData(MessageState.Sent)]
+    public void Restore_ThrowsException_WhenStateIsInvalidForRestoration(MessageState invalidState)
+    {
+        // Arrange
+        FakeTimeProvider timeProvider = new();
+        Guid id = Guid.CreateVersion7();
+        byte[] payload = [];
+        DateTimeOffset createdAt = timeProvider.GetUtcNow();
+        int deliveryCount = 0;
+        int maxDeliveryAttempts = 5;
+        
+        // Act
+        Action actual = () => Message.Restore(
+            id, payload, invalidState, createdAt, null, deliveryCount, maxDeliveryAttempts);
+
+        // Assert
+        actual.ShouldThrow<InvalidRestoreMessageStateException>();
+    }
+    
+    [Theory]
+    [InlineData(5)]
+    [InlineData(6)]
+    public void Restore_SetsStateToFailed_WhenDeliveryCountReachedMaxAttemptsAndStateIsNotDelivered(int deliveryCount)
+    {
+        // Arrange
+        FakeTimeProvider timeProvider = new();
+        Guid id = Guid.CreateVersion7();
+        MessageState inputState = MessageState.Restored;
+        byte[] payload = [];
+        DateTimeOffset createdAt = timeProvider.GetUtcNow();
+        int maxDeliveryAttempts = 5;
+
+        // Act
+        Message actual = Message.Restore(
+            id, payload, inputState, createdAt, null, deliveryCount, maxDeliveryAttempts);
+
+        // Assert
+        actual.State.ShouldBe(MessageState.Failed);
+    }
+
+    [Theory]
+    [InlineData(5)]
+    [InlineData(6)]
+    public void Restore_KeepsStateAsDelivered_WhenDeliveryCountReachedMaxAttemptsAndStateIsDelivered(int deliveryCount)
+    {
+        // Arrange
+        FakeTimeProvider timeProvider = new();
+        Guid id = Guid.CreateVersion7();
+        MessageState inputState = MessageState.Delivered;
+        byte[] payload = [];
+        DateTimeOffset createdAt = timeProvider.GetUtcNow();
+        int maxDeliveryAttempts = 5;
+
+        // Act
+        Message actual = Message.Restore(
+            id, payload, inputState, createdAt, null, deliveryCount, maxDeliveryAttempts);
+
+        // Assert
+        actual.State.ShouldBe(MessageState.Delivered);
+    }
+
+    [Fact]
+    public void Restore_CreateRestoredMessage_WhenInputDataIsValid()
+    {
+        // Arrange
+        FakeTimeProvider timeProvider = new();
+        Guid id = Guid.CreateVersion7();
+        MessageState inputState = MessageState.Restored;
+        byte[] payload = [0x01, 0x02];
+        DateTimeOffset createdAt = timeProvider.GetUtcNow();
+        DateTimeOffset lastSentAt = timeProvider.GetUtcNow().Add(TimeSpan.FromMinutes(1));
+        int deliveryCount = 1;
+        int maxDeliveryAttempts = 5;
+        
+        // Act
+        Message actual = Message.Restore(
+            id, payload, inputState, createdAt, lastSentAt, deliveryCount, maxDeliveryAttempts);
+        
+        // Assert
+        actual.ShouldNotBeNull();
+        actual.Id.ShouldBe(id);
+        actual.Payload.ShouldBe(payload);
+        actual.State.ShouldBe(MessageState.Restored);
+        actual.CreatedAt.ShouldBe(createdAt);
+        actual.LastSentAt.ShouldBe(lastSentAt);
+        actual.DeliveryCount.ShouldBe(deliveryCount);
+        actual.MaxDeliveryAttempts.ShouldBe(maxDeliveryAttempts);
+    }
+    
+    [Fact]
     public void TryEnqueue_TransitionsToEnqueued_WhenMessageIsCreated()
     {
         // Arrange
         FakeTimeProvider timeProvider = new FakeTimeProvider();
         Message sut = Message.Create(Guid.CreateVersion7(), [], 1, timeProvider);
+        
+        // Act
+        bool actual = sut.TryEnqueue();
+        
+        // Assert
+        actual.ShouldBeTrue();
+        sut.State.ShouldBe(MessageState.Enqueued);
+    }
+
+    [Fact]
+    public void TryEnqueue_TransitionsToEnqueued_WhenMessageIsRestored()
+    {
+        // Arrange
+        FakeTimeProvider timeProvider = new();
+        Message sut = Message.Restore(
+            Guid.CreateVersion7(),
+            [],
+            MessageState.Restored,
+            timeProvider.GetUtcNow(), 
+            null, 
+            0, 
+            5);
         
         // Act
         bool actual = sut.TryEnqueue();
