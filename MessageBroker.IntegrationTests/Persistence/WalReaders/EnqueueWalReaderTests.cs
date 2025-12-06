@@ -1,4 +1,6 @@
-﻿using MessageBroker.Persistence.Events;
+﻿using MessageBroker.Persistence.Abstractions;
+using MessageBroker.Persistence.CrcProviders;
+using MessageBroker.Persistence.Events;
 using MessageBroker.Persistence.WalReaders;
 using Shouldly;
 
@@ -19,20 +21,27 @@ public class EnqueueWalReaderTests : IDisposable
     {
         // Arrange
         string filePath = Path.Combine(_directory, "valid.log");
+        ICrcProvider crcProvider = new CrcProvider();
         Guid messageId = Guid.CreateVersion7();
         byte[] payload = [0xAA, 0xBB, 0xCC];
 
         using (var writer = new BinaryWriter(File.OpenWrite(filePath)))
         {
             // Length: 4 (size) + 16 (id) + 3 (payload) = 23
-            writer.Write(23); 
+            byte[] lengthBuffer = BitConverter.GetBytes(23);
             // Id
-            writer.Write(messageId.ToByteArray());
-            // Payload
-            writer.Write(payload);
+            byte[] idBuffer = messageId.ToByteArray();
+            // Concat
+            byte[] data = lengthBuffer.Concat(idBuffer).Concat(payload).ToArray();
+            // Header
+            byte[] header = new byte[8];
+            crcProvider.WriteHeader(header, data);
+
+            writer.Write(header);
+            writer.Write(data);
         }
         
-        EnqueueWalReader sut = new();
+        EnqueueWalReader sut = new(crcProvider);
 
         // Act
         EnqueueWalEvent[] actual = sut.Read(filePath).ToArray();
@@ -50,20 +59,27 @@ public class EnqueueWalReaderTests : IDisposable
     {
         // Arrange
         string filePath = Path.Combine(_directory, "valid.log");
+        ICrcProvider crcProvider = new CrcProvider();
         Guid messageId = Guid.CreateVersion7();
         byte[] payload = [];
 
         using (var writer = new BinaryWriter(File.OpenWrite(filePath)))
         {
             // Length: 4 (size) + 16 (id) + 0 (payload) = 20
-            writer.Write(20); 
+            byte[] lengthBuffer = BitConverter.GetBytes(20);
             // Id
-            writer.Write(messageId.ToByteArray());
-            // Payload
-            writer.Write(payload);
+            byte[] idBuffer = messageId.ToByteArray();
+            // Concat
+            byte[] data = lengthBuffer.Concat(idBuffer).Concat(payload).ToArray();
+            // Header
+            byte[] header = new byte[8];
+            crcProvider.WriteHeader(header, data);
+
+            writer.Write(header);
+            writer.Write(data);
         }
         
-        EnqueueWalReader sut = new();
+        EnqueueWalReader sut = new(crcProvider);
 
         // Act
         EnqueueWalEvent[] actual = sut.Read(filePath).ToArray();
@@ -74,23 +90,32 @@ public class EnqueueWalReaderTests : IDisposable
     }
 
     [Fact]
-    public void Read_IgnoresRecord_WhenFileIsCorrupted()
+    public void Read_IgnoresLastRecord_WhenFileIsCorruptedAtTheEnd()
     {
         // Arrange
         string filePath = Path.Combine(_directory, "valid.log");
+        ICrcProvider crcProvider = new CrcProvider();
         Guid messageId = Guid.CreateVersion7();
+        byte[] payload = [0xAA, 0xBB, 0xCC];
 
         using (var writer = new BinaryWriter(File.OpenWrite(filePath)))
         {
             // Length: 4 (size) + 16 (id) + 3 (payload) = 23
-            writer.Write(23); 
+            byte[] lengthBuffer = BitConverter.GetBytes(23);
             // Id
-            writer.Write(messageId.ToByteArray());
-            // Payload: write only 1 byte
+            byte[] idBuffer = messageId.ToByteArray();
+            // Concat
+            byte[] data = lengthBuffer.Concat(idBuffer).Concat(payload).ToArray();
+            // Header
+            byte[] header = new byte[8];
+            crcProvider.WriteHeader(header, data);
+
+            writer.Write(header);
+            // Write only 1 byte
             writer.Write([0x01]);
         }
         
-        EnqueueWalReader sut = new();
+        EnqueueWalReader sut = new(crcProvider);
 
         // Act
         EnqueueWalEvent[] actual = sut.Read(filePath).ToArray();
@@ -104,6 +129,7 @@ public class EnqueueWalReaderTests : IDisposable
     {
         // Arrange
         string filePath = Path.Combine(_directory, "valid.log");
+        ICrcProvider crcProvider = new CrcProvider();
         
         Guid messageId1 = Guid.CreateVersion7();
         byte[] payload1 = [0xAA, 0xBB, 0xCC];
@@ -113,16 +139,24 @@ public class EnqueueWalReaderTests : IDisposable
         
         using (var writer = new BinaryWriter(File.OpenWrite(filePath)))
         {
-            writer.Write(23); 
-            writer.Write(messageId1.ToByteArray());
-            writer.Write(payload1);
+            byte[] lengthBuffer1 = BitConverter.GetBytes(23);
+            byte[] idBuffer1 = messageId1.ToByteArray();
+            byte[] data1 = lengthBuffer1.Concat(idBuffer1).Concat(payload1).ToArray();
+            byte[] header1 = new byte[8];
+            crcProvider.WriteHeader(header1, data1);
+            writer.Write(header1);
+            writer.Write(data1);
             
-            writer.Write(22);
-            writer.Write(messageId2.ToByteArray());
-            writer.Write(payload2);
+            byte[] lengthBuffer2 = BitConverter.GetBytes(22);
+            byte[] idBuffer2 = messageId2.ToByteArray();
+            byte[] data2 = lengthBuffer2.Concat(idBuffer2).Concat(payload2).ToArray();
+            byte[] header2 = new byte[8];
+            crcProvider.WriteHeader(header2, data2);
+            writer.Write(header2);
+            writer.Write(data2);
         }
         
-        EnqueueWalReader sut = new();
+        EnqueueWalReader sut = new(crcProvider);
         
         // Act
         EnqueueWalEvent[] actual = sut.Read(filePath).ToArray();

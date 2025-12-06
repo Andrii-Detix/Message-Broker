@@ -1,4 +1,5 @@
-﻿using MessageBroker.Persistence.Events;
+﻿using MessageBroker.Persistence.Abstractions;
+using MessageBroker.Persistence.Events;
 using MessageBroker.Persistence.WalReaders;
 
 namespace MessageBroker.IntegrationTests.Persistence.WalReaders;
@@ -7,9 +8,10 @@ public record FaultyTestWalEvent() : WalEvent(WalEventType.Enqueue);
 
 public class CustomException() : Exception("Custom Exception.");
 
-public class FaultyTestWalReader : AbstractWalReader<FaultyTestWalEvent>
+public class FaultyTestWalReader(ICrcProvider crcProvider) 
+    : AbstractWalReader<FaultyTestWalEvent>(crcProvider)
 {
-    protected override bool TryReadNext(BinaryReader reader, out FaultyTestWalEvent? evt)
+    protected override FaultyTestWalEvent ParseToEvent(ReadOnlySpan<byte> data)
     {
         throw new CustomException();
     }
