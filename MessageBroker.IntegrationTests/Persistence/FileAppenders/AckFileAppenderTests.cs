@@ -1,4 +1,5 @@
 ﻿using MessageBroker.Persistence.Abstractions;
+using MessageBroker.Persistence.CrcProviders;
 using MessageBroker.Persistence.Events;
 using MessageBroker.Persistence.FileAppenders;
 using MessageBroker.Persistence.FilePathCreators;
@@ -21,11 +22,12 @@ public class AckFileAppenderTests : IDisposable
     {
         // Arrange
         FakeTimeProvider timeProvider = new();
+        ICrcProvider crcProvider = new CrcProvider();
         IFilePathCreator pathCreator = new FilePathCreator(_directory, "ack", "ext", timeProvider);
-        AckFileAppender sut = new(pathCreator, 2);
+        AckFileAppender sut = new(crcProvider, pathCreator, 2);
         AckWalEvent evt = new(Guid.CreateVersion7());
 
-        int expectedLength = 16; // message_id (16)
+        int expectedLength = 8 + 16; // header (8) + message_id (16)
         
         // Act
         sut.Append(evt);
@@ -37,8 +39,9 @@ public class AckFileAppenderTests : IDisposable
         byte[] content = File.ReadAllBytes(actualFile);
         content.ShouldNotBeEmpty();
         content.Length.ShouldBe(expectedLength);
-        
-        Guid actualMessageId = new Guid(content);
+
+        byte[] idBuffer = content.AsSpan(8).ToArray();
+        Guid actualMessageId = new Guid(idBuffer);
         actualMessageId.ShouldBe(evt.MessageId);
     }
     

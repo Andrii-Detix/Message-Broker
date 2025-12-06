@@ -1,4 +1,5 @@
 ﻿using MessageBroker.Persistence.Abstractions;
+using MessageBroker.Persistence.CrcProviders;
 using MessageBroker.Persistence.Events;
 using MessageBroker.Persistence.FileAppenders;
 using MessageBroker.Persistence.FilePathCreators;
@@ -21,11 +22,12 @@ public class DeadFileAppenderTests : IDisposable
     {
         // Arrange
         FakeTimeProvider timeProvider = new();
+        ICrcProvider crcProvider = new CrcProvider();
         IFilePathCreator pathCreator = new FilePathCreator(_directory, "dead", "ext", timeProvider);
-        DeadFileAppender sut = new(pathCreator, 2);
+        DeadFileAppender sut = new(crcProvider, pathCreator, 2);
         DeadWalEvent evt = new(Guid.CreateVersion7());
 
-        int expectedLength = 16; // message_id (16)
+        int expectedLength = 8 + 16; // header (8) + message_id (16)
         
         // Act
         sut.Append(evt);
@@ -38,7 +40,8 @@ public class DeadFileAppenderTests : IDisposable
         content.ShouldNotBeEmpty();
         content.Length.ShouldBe(expectedLength);
         
-        Guid actualMessageId = new Guid(content);
+        byte[] idBuffer = content.AsSpan(8).ToArray();
+        Guid actualMessageId = new Guid(idBuffer);
         actualMessageId.ShouldBe(evt.MessageId);
     }
     

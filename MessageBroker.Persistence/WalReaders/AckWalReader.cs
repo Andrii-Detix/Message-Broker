@@ -1,25 +1,17 @@
-﻿using MessageBroker.Persistence.Events;
+﻿using MessageBroker.Persistence.Abstractions;
+using MessageBroker.Persistence.Events;
 
 namespace MessageBroker.Persistence.WalReaders;
 
-public class AckWalReader : AbstractWalReader<AckWalEvent>
+public class AckWalReader(ICrcProvider crcProvider)
+    : AbstractWalReader<AckWalEvent>(crcProvider)
 {
-    protected override bool TryReadNext(BinaryReader reader, out AckWalEvent? evt)
+    protected override AckWalEvent ParseToEvent(ReadOnlySpan<byte> data)
     {
-        const int guidLength = 16;
+        Guid messageId = new Guid(data);
         
-        evt = null;
+        AckWalEvent evt = new(messageId);
         
-        if (!CanRead(reader.BaseStream, guidLength))
-        {
-            return false;
-        }
-
-        byte[] buffer = reader.ReadBytes(guidLength);
-        Guid messageId = new Guid(buffer);
-        
-        evt = new AckWalEvent(messageId);
-        
-        return true;
+        return evt;
     }
 }

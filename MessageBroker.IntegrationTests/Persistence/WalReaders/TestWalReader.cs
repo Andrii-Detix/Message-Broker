@@ -1,24 +1,21 @@
-﻿using MessageBroker.Persistence.Events;
+﻿using System.Buffers.Binary;
+using MessageBroker.Persistence.Abstractions;
+using MessageBroker.Persistence.Events;
 using MessageBroker.Persistence.WalReaders;
 
 namespace MessageBroker.IntegrationTests.Persistence.WalReaders;
 
 public record TestWalEvent(int Value) : WalEvent(WalEventType.Enqueue);
 
-public class TestWalReader : AbstractWalReader<TestWalEvent>
+public class TestWalReader(ICrcProvider crcProvider) 
+    : AbstractWalReader<TestWalEvent>(crcProvider)
 {
-    protected override bool TryReadNext(BinaryReader reader, out TestWalEvent? evt)
+    protected override TestWalEvent ParseToEvent(ReadOnlySpan<byte> data)
     {
-        if (!CanRead(reader.BaseStream, 4))
-        {
-            evt = null;
-            return false;
-        }
+        int value = BinaryPrimitives.ReadInt32LittleEndian(data);
+
+        TestWalEvent evt = new(value);
         
-        int data = reader.ReadInt32();
-        
-        evt = new TestWalEvent(data);
-        
-        return true;
+        return evt;
     }
 }

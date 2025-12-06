@@ -10,6 +10,7 @@ public abstract class AbstractFileAppender<TEvent>
 {
     private readonly Lock _streamLocker = new();
     
+    private readonly ICrcProvider _crcProvider;
     private readonly IFilePathCreator _filePathCreator;
     private readonly int _maxWriteCountPerFile;
 
@@ -18,9 +19,11 @@ public abstract class AbstractFileAppender<TEvent>
     private bool _isDisposed = false;
 
     protected AbstractFileAppender(
+        ICrcProvider? crcProvider,
         IFilePathCreator? filePathCreator,
         int maxWriteCountPerFile)
     {
+        ArgumentNullException.ThrowIfNull(crcProvider);
         ArgumentNullException.ThrowIfNull(filePathCreator);
         
         if (maxWriteCountPerFile < 1)
@@ -33,6 +36,7 @@ public abstract class AbstractFileAppender<TEvent>
         
         CurrentFile = path;
         _fileStream = fileStream;
+        _crcProvider = crcProvider;
         _filePathCreator = filePathCreator;
         _maxWriteCountPerFile = maxWriteCountPerFile;
     }
@@ -78,8 +82,14 @@ public abstract class AbstractFileAppender<TEvent>
             {
                 Rotate();
             }
+
+            int headerSize = _crcProvider.HeaderSize;
+            Span<byte> header = stackalloc byte[headerSize];
+            _crcProvider.WriteHeader(header, data);
             
+            _fileStream.Write(header);
             _fileStream.Write(data);
+            
             _fileStream.Flush();
             _writeCount++;
         }

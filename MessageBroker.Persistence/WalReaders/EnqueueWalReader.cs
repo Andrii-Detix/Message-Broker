@@ -1,39 +1,30 @@
-﻿using MessageBroker.Persistence.Events;
+﻿using System.Buffers.Binary;
+using MessageBroker.Persistence.Abstractions;
+using MessageBroker.Persistence.Events;
 
 namespace MessageBroker.Persistence.WalReaders;
 
-public class EnqueueWalReader : AbstractWalReader<EnqueueWalEvent>
+public class EnqueueWalReader(ICrcProvider crcProvider) 
+    : AbstractWalReader<EnqueueWalEvent>(crcProvider)
 {
-    protected override bool TryReadNext(BinaryReader reader, out EnqueueWalEvent? evt)
+    protected override EnqueueWalEvent ParseToEvent(ReadOnlySpan<byte> data)
     {
         const int intSize = 4;
         const int guidSize = 16;
+
+        int offset = 0;
+
+        int length = BinaryPrimitives.ReadInt32LittleEndian(data.Slice(offset, intSize));
+        offset += intSize;
         
-        evt = null;
+        Guid messageId = new Guid(data.Slice(offset, guidSize));
+        offset += guidSize;
+
+        int payloadLength = length - intSize - guidSize;
+        byte[] payload = data.Slice(offset, payloadLength).ToArray();
+
+        EnqueueWalEvent evt = new(messageId, payload);
         
-        // Read stored event length
-        if (!CanRead(reader.BaseStream, intSize))
-        {
-            return false;
-        }
-
-        int length = reader.ReadInt32();
-        int restLength = length - intSize;
-
-        // Read rest of stored event
-        if (!CanRead(reader.BaseStream, restLength))
-        {
-            return false;
-        }
-
-        byte[] buffer = reader.ReadBytes(guidSize);
-        Guid messageId = new Guid(buffer);
-
-        int payloadLength = restLength - guidSize;
-        buffer = reader.ReadBytes(payloadLength);
-
-        evt = new EnqueueWalEvent(messageId, buffer);
-        
-        return true;
+        return evt;
     }
 }

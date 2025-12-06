@@ -4,9 +4,10 @@ using MessageBroker.Persistence.Events;
 namespace MessageBroker.Persistence.FileAppenders;
 
 public class DeadFileAppender(
+    ICrcProvider? crcProvider,
     IFilePathCreator? filePathCreator, 
     int maxWriteCountPerFile) 
-    : AbstractFileAppender<DeadWalEvent>(filePathCreator, maxWriteCountPerFile)
+    : AbstractFileAppender<DeadWalEvent>(crcProvider, filePathCreator, maxWriteCountPerFile)
 {
     public override void Append(DeadWalEvent evt)
     {
