@@ -1,0 +1,10 @@
+﻿namespace MessageBroker.Persistence.Recovery;
+
+public record RecoveredMessageDto(Guid MessageId, byte[] Payload)
+{
+    public Guid MessageId { get; } = MessageId;
+
+    public byte[] Payload { get; } = Payload;
+
+    public int DeliveryAttempts { get; set; } = 0;
+}
