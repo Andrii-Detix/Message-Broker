@@ -7,9 +7,10 @@ namespace MessageBroker.IntegrationTests.Persistence.FileAppenders;
 public record TestWalEvent() : WalEvent(WalEventType.Enqueue);
 
 public class TestFileAppender(
+    ICrcProvider? crcProvider,
     IFilePathCreator? pathCreator,
     int maxWriteCountPerFile)
-    : AbstractFileAppender<TestWalEvent>(pathCreator, maxWriteCountPerFile)
+    : AbstractFileAppender<TestWalEvent>(crcProvider, pathCreator, maxWriteCountPerFile)
 {
     public override void Append(TestWalEvent evt) { }
 

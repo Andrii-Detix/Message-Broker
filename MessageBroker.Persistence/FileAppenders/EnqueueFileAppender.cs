@@ -5,9 +5,10 @@ using MessageBroker.Persistence.Events;
 namespace MessageBroker.Persistence.FileAppenders;
 
 public class EnqueueFileAppender(
+    ICrcProvider? crcProvider,
     IFilePathCreator? filePathCreator, 
     int maxWriteCountPerFile) 
-    : AbstractFileAppender<EnqueueWalEvent>(filePathCreator, maxWriteCountPerFile)
+    : AbstractFileAppender<EnqueueWalEvent>(crcProvider, filePathCreator, maxWriteCountPerFile)
 {
     public override void Append(EnqueueWalEvent evt)
     {
