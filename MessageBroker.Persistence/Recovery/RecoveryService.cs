@@ -1,0 +1,131 @@
+﻿using MessageBroker.Core.Abstractions;
+using MessageBroker.Core.Configurations;
+using MessageBroker.Core.Messages.Models;
+using MessageBroker.Persistence.Abstractions;
+using MessageBroker.Persistence.Events;
+using MessageBroker.Persistence.Manifests;
+namespace MessageBroker.Persistence.Recovery;
+
+public class RecoveryService : IRecoveryService
+{
+    private readonly IManifestManager _manifestManager;
+    private readonly IWalReader<EnqueueWalEvent> _enqueueWalReader;
+    private readonly IWalReader<AckWalEvent> _ackWalReader;
+    private readonly IWalReader<DeadWalEvent> _deadWalReader;
+    private readonly IMessageQueueFactory _queueFactory;
+    private readonly MessageConfiguration _messageConfiguration;
+    private readonly TimeProvider _timeProvider;
+
+    public RecoveryService(
+        IManifestManager manifestManager,
+        IWalReader<EnqueueWalEvent> enqueueWalReader,
+        IWalReader<AckWalEvent> ackWalReader,
+        IWalReader<DeadWalEvent> deadWalReader,
+        IMessageQueueFactory queueFactory,
+        MessageConfiguration messageConfiguration,
+        TimeProvider timeProvider)
+    {
+        ArgumentNullException.ThrowIfNull(manifestManager);
+        ArgumentNullException.ThrowIfNull(enqueueWalReader);
+        ArgumentNullException.ThrowIfNull(ackWalReader);
+        ArgumentNullException.ThrowIfNull(deadWalReader);
+        ArgumentNullException.ThrowIfNull(queueFactory);
+        ArgumentNullException.ThrowIfNull(messageConfiguration);
+        ArgumentNullException.ThrowIfNull(timeProvider);
+        
+        _manifestManager = manifestManager;
+        _enqueueWalReader = enqueueWalReader;
+        _ackWalReader = ackWalReader;
+        _deadWalReader = deadWalReader;
+        _queueFactory = queueFactory;
+        _messageConfiguration = messageConfiguration;
+        _timeProvider = timeProvider;
+    }
+    
+    public IMessageQueue Recover()
+    {
+        LinkedList<RecoveredMessageDto> dtos = RestoreRecoveryMessageDtos();
+
+        IMessageQueue queue = _queueFactory.Create();
+        
+        foreach (var dto in dtos)
+        {
+            Message message = RestoreMessage(dto);
+            
+            queue.TryEnqueue(message);
+        }
+        
+        return queue;
+    }
+
+    private IEnumerable<TEvent> GetEvents<TEvent>(IWalReader<TEvent> walReader, List<string> files)
+        where TEvent : WalEvent
+    {
+        return files.SelectMany(walReader.Read);
+    }
+
+    private LinkedList<RecoveredMessageDto> RestoreRecoveryMessageDtos()
+    {
+        WalFiles walFiles = _manifestManager.LoadWalFiles();
+        
+        IEnumerable<Guid> ackIds = GetEvents(_ackWalReader, walFiles.AckFiles)
+            .Select(e => e.MessageId);
+        
+        IEnumerable<Guid> deadIds = GetEvents(_deadWalReader, walFiles.DeadFiles)
+            .Select(e => e.MessageId);
+        
+        HashSet<Guid> completedIds = ackIds.Concat(deadIds).ToHashSet();
+
+        List<string> enqueueFiles = [];
+        if (!string.IsNullOrWhiteSpace(walFiles.MergedFile))
+        {
+            enqueueFiles.Add(walFiles.MergedFile);
+        }
+        
+        enqueueFiles.AddRange(walFiles.EnqueueFiles);
+
+        IEnumerable<EnqueueWalEvent> enqueueWalEvents = GetEvents(_enqueueWalReader, enqueueFiles);
+
+        LinkedList<RecoveredMessageDto> orderedMessages = [];
+        Dictionary<Guid, LinkedListNode<RecoveredMessageDto>> nodeLookup = [];
+        
+        foreach (var enqueueWalEvent in enqueueWalEvents)
+        {
+            Guid messageId = enqueueWalEvent.MessageId;
+
+            if (completedIds.Contains(messageId))
+            {
+                continue;
+            }
+
+            if (nodeLookup.TryGetValue(messageId, out LinkedListNode<RecoveredMessageDto>? node))
+            {
+                node.Value.DeliveryAttempts++;
+                
+                orderedMessages.Remove(node);
+                orderedMessages.AddLast(node);
+                
+                continue;
+            }
+
+            RecoveredMessageDto dto = new(enqueueWalEvent.MessageId, enqueueWalEvent.Payload);
+            
+            node = orderedMessages.AddLast(dto);
+            nodeLookup.TryAdd(messageId, node);
+        }
+
+        return orderedMessages;
+    }
+
+    private Message RestoreMessage(RecoveredMessageDto dto)
+    {
+        return Message.Restore(
+            dto.MessageId,
+            dto.Payload,
+            MessageState.Restored,
+            _timeProvider.GetUtcNow(),
+            null,
+            dto.DeliveryAttempts,
+            _messageConfiguration.MaxDeliveryAttempts);
+    } 
+}
