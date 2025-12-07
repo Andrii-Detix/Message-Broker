@@ -3,7 +3,6 @@ using MessageBroker.Core.Messages.Models;
 using MessageBroker.Engine.Abstractions;
 using MessageBroker.Persistence.Abstractions;
 using MessageBroker.Persistence.Events;
-using Microsoft.Extensions.Logging;
 
 namespace MessageBroker.Engine.RequeueServices;
 
@@ -12,13 +11,11 @@ public class RequeueService : IRequeueService
     private readonly IMessageQueue _messageQueue;
     private readonly IWriteAheadLog _wal;
     private readonly IExpiredMessagePolicy _expiredMessagePolicy;
-    private readonly ILogger<RequeueService>? _logger;
 
     public RequeueService(
         IMessageQueue? messageQueue,
         IWriteAheadLog? wal,
-        IExpiredMessagePolicy? expiredMessagePolicy,
-        ILogger<RequeueService>? logger = null)
+        IExpiredMessagePolicy? expiredMessagePolicy)
     {
         ArgumentNullException.ThrowIfNull(messageQueue);
         ArgumentNullException.ThrowIfNull(wal);
@@ -27,7 +24,6 @@ public class RequeueService : IRequeueService
         _messageQueue = messageQueue;
         _wal = wal;
         _expiredMessagePolicy = expiredMessagePolicy;
-        _logger = logger;
     }
     
     public void Requeue()
@@ -38,14 +34,7 @@ public class RequeueService : IRequeueService
         {
             RequeueWalEvent requeueEvent = new(message.Id);
 
-            bool walSuccess = _wal.Append(requeueEvent);
-
-            if (!walSuccess)
-            {
-                _logger?.LogWarning(
-                    "Failed to persist Requeue event for message {Id}. Requeuing in memory only.", 
-                    message.Id);
-            }
+            _wal.Append(requeueEvent);
 
             bool requeueSuccess = _messageQueue.TryEnqueue(message);
 

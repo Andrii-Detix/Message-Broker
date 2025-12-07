@@ -3,7 +3,6 @@ using MessageBroker.Core.Messages.Models;
 using MessageBroker.Engine.RequeueServices;
 using MessageBroker.Persistence.Abstractions;
 using MessageBroker.Persistence.Events;
-using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Time.Testing;
 using Moq;
 using Shouldly;
@@ -15,14 +14,12 @@ public class RequeueServiceTests
     private readonly Mock<IMessageQueue> _queueMock;
     private readonly Mock<IWriteAheadLog> _walMock;
     private readonly Mock<IExpiredMessagePolicy> _expiredPolicyMock;
-    private readonly Mock<ILogger<RequeueService>> _loggerMock;
 
     public RequeueServiceTests()
     {
         _queueMock = new();
         _walMock = new();
         _expiredPolicyMock = new();
-        _loggerMock = new();
     }
 
     [Fact]
@@ -31,10 +28,9 @@ public class RequeueServiceTests
         // Arrange
         IWriteAheadLog wal = _walMock.Object;
         IExpiredMessagePolicy expiredPolicy = _expiredPolicyMock.Object;
-        ILogger<RequeueService> logger = _loggerMock.Object;
         
         // Act
-        Action actual = () => new RequeueService(null, wal, expiredPolicy, logger);
+        Action actual = () => new RequeueService(null, wal, expiredPolicy);
         
         // Assert
         actual.ShouldThrow<ArgumentNullException>();
@@ -46,10 +42,9 @@ public class RequeueServiceTests
         // Arrange
         IMessageQueue queue = _queueMock.Object;
         IExpiredMessagePolicy expiredPolicy = _expiredPolicyMock.Object;
-        ILogger<RequeueService> logger = _loggerMock.Object;
         
         // Act
-        Action actual = () => new RequeueService(queue, null, expiredPolicy, logger);
+        Action actual = () => new RequeueService(queue, null, expiredPolicy);
         
         // Assert
         actual.ShouldThrow<ArgumentNullException>();
@@ -61,10 +56,9 @@ public class RequeueServiceTests
         // Arrange
         IMessageQueue queue = _queueMock.Object;
         IWriteAheadLog wal = _walMock.Object;
-        ILogger<RequeueService> logger = _loggerMock.Object;
         
         // Act
-        Action actual = () => new RequeueService(queue, wal, null, logger);
+        Action actual = () => new RequeueService(queue, wal, null);
         
         // Assert
         actual.ShouldThrow<ArgumentNullException>();
@@ -72,22 +66,6 @@ public class RequeueServiceTests
     
     [Fact]
     public void Constructor_CreatesRequeueService_WhenInputDataIsValid()
-    {
-        // Arrange
-        IMessageQueue queue = _queueMock.Object;
-        IWriteAheadLog wal = _walMock.Object;
-        IExpiredMessagePolicy expiredPolicy = _expiredPolicyMock.Object;
-        ILogger<RequeueService> logger = _loggerMock.Object;
-        
-        // Act
-        RequeueService actual = new(queue, wal, expiredPolicy, logger);
-        
-        // Assert
-        actual.ShouldNotBeNull();
-    }
-
-    [Fact]
-    public void Constructor_CreatesRequeueService_WithoutInputLogger()
     {
         // Arrange
         IMessageQueue queue = _queueMock.Object;
@@ -115,8 +93,6 @@ public class RequeueServiceTests
         _queueMock.Setup(q => q.TakeExpiredMessages(expiredPolicy))
             .Returns(messages);
         _queueMock.Setup(q => q.TryEnqueue(It.IsAny<Message>()))
-            .Returns(true);
-        _walMock.Setup(w => w.Append(It.IsAny<RequeueWalEvent>()))
             .Returns(true);
 
         IMessageQueue queue = _queueMock.Object;
@@ -199,33 +175,5 @@ public class RequeueServiceTests
             DeadWalEvent deadEvent = new(message.Id);
             _walMock.Verify(w => w.Append(deadEvent), Times.Once);
         }
-    }
-
-    [Fact]
-    public void Requeue_EnqueuesOnlyToMemory_WhenWalAppendsFail()
-    {
-        // Arrange
-        FakeTimeProvider timeProvider = new();
-        Message message = Message.Create(Guid.CreateVersion7(), [], 2, timeProvider);
-        
-        IExpiredMessagePolicy expiredPolicy = _expiredPolicyMock.Object;
-        _queueMock.Setup(q => q.TakeExpiredMessages(expiredPolicy))
-            .Returns([message]);
-        _queueMock.Setup(q => q.TryEnqueue(It.IsAny<Message>()))
-            .Returns(true);
-        _walMock.Setup(w => w.Append(It.IsAny<RequeueWalEvent>()))
-            .Returns(false);
-        
-        IMessageQueue queue = _queueMock.Object;
-        IWriteAheadLog wal = _walMock.Object;
-        RequeueService sut = new(queue, wal, expiredPolicy);
-        
-        // Act
-        sut.Requeue();
-        
-        // Assert
-        RequeueWalEvent requeueEvent = new(message.Id);
-        _walMock.Verify(w => w.Append(requeueEvent), Times.Once);
-        _queueMock.Verify(q => q.TryEnqueue(message), Times.Once);
     }
 }

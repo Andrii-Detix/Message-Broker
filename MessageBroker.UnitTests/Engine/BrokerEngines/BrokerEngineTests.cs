@@ -194,7 +194,7 @@ public class BrokerEngineTests
     {
         // Arrange
         _walMock.Setup(w => w.Append(It.IsAny<WalEvent>()))
-            .Returns(false);
+            .Throws(new BrokerStorageException());
         _queueMock.Setup(q => q.TryEnqueue(It.IsAny<Message>()))
             .Returns(true);
         
@@ -216,8 +216,6 @@ public class BrokerEngineTests
     public void Publish_AppendsCompensatingDeadEvent_WhenFailureHasOccurredDuringAppendingEnqueueEvent()
     {
         // Arrange
-        _walMock.Setup(w => w.Append(It.IsAny<WalEvent>()))
-            .Returns(true);
         _queueMock.Setup(q => q.TryEnqueue(It.IsAny<Message>()))
             .Returns(false);
         
@@ -242,10 +240,9 @@ public class BrokerEngineTests
         // Arrange
         EnqueueWalEvent? capturedEvent = null;
         Message? capturedMessage = null;
-        
+
         _walMock.Setup(w => w.Append(It.IsAny<EnqueueWalEvent>()))
-            .Callback<WalEvent>(evt => capturedEvent = evt as EnqueueWalEvent)
-            .Returns(true);
+            .Callback<WalEvent>(evt => capturedEvent = evt as EnqueueWalEvent);
         _queueMock.Setup(q => q.TryEnqueue(It.IsAny<Message>()))
             .Callback<Message>(message => capturedMessage = message)
             .Returns(true);
@@ -277,10 +274,9 @@ public class BrokerEngineTests
         // Arrange
         ConcurrentQueue<Guid> walMessageIds = [];
         ConcurrentQueue<Guid> queueMessageIds = [];
-        
+
         _walMock.Setup(w => w.Append(It.IsAny<EnqueueWalEvent>()))
-            .Callback<WalEvent>(evt => walMessageIds.Enqueue((evt as EnqueueWalEvent)!.MessageId))
-            .Returns(true);
+            .Callback<WalEvent>(evt => walMessageIds.Enqueue((evt as EnqueueWalEvent)!.MessageId));
         _queueMock.Setup(q => q.TryEnqueue(It.IsAny<Message>()))
             .Callback<Message>(message => queueMessageIds.Enqueue(message.Id))
             .Returns(true);
@@ -362,7 +358,7 @@ public class BrokerEngineTests
     {
         // Arrange
         _walMock.Setup(w => w.Append(It.IsAny<AckWalEvent>()))
-            .Returns(false);
+            .Throws(new BrokerStorageException());
         
         FakeTimeProvider timeProvider = new();
         int maxPayloadLength = 5;
@@ -386,8 +382,6 @@ public class BrokerEngineTests
     public void Ack_ThrowsException_WhenThereIsNoInFlightMessageWithInputId()
     {
         // Arrange
-        _walMock.Setup(w => w.Append(It.IsAny<AckWalEvent>()))
-            .Returns(true);
         _queueMock.Setup(q => q.Ack(It.IsAny<Guid>()))
             .Returns((Message?)null);
         
@@ -413,8 +407,6 @@ public class BrokerEngineTests
         Guid messageId = Guid.CreateVersion7();
         Message message = Message.Create(messageId, [], 1, timeProvider);
         
-        _walMock.Setup(w => w.Append(It.IsAny<AckWalEvent>()))
-            .Returns(true);
         _queueMock.Setup(q => q.Ack(messageId))
             .Returns(message);
         

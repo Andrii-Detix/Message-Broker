@@ -11,13 +11,10 @@ public class WriteAheadLogManager : IWriteAheadLog
     private readonly IFileAppender<AckWalEvent> _ackAppender;
     private readonly IFileAppender<DeadWalEvent> _deadAppender;
 
-    private readonly ILogger<WriteAheadLogManager>? _logger;
-
     public WriteAheadLogManager(
         IFileAppender<EnqueueWalEvent>? enqueueAppender,
         IFileAppender<AckWalEvent>? ackAppender,
-        IFileAppender<DeadWalEvent>? deadAppender,
-        ILogger<WriteAheadLogManager>? logger = null)
+        IFileAppender<DeadWalEvent>? deadAppender)
     {
         ArgumentNullException.ThrowIfNull(enqueueAppender);
         ArgumentNullException.ThrowIfNull(ackAppender);
@@ -26,25 +23,9 @@ public class WriteAheadLogManager : IWriteAheadLog
         _enqueueAppender = enqueueAppender;
         _ackAppender = ackAppender;
         _deadAppender = deadAppender;
-        _logger = logger;
     }
     
-    public bool Append(WalEvent evt)
-    {
-        try
-        {
-            DispatchWalEvent(evt);
-            return true;
-        }
-        catch (Exception ex)
-        {
-            _logger?.LogError(ex, $"Storage of event '{evt.GetType().Name}' completed with failure '{ex.Message}'.");
-            
-            return false;
-        }
-    }
-
-    private void DispatchWalEvent(WalEvent evt)
+    public void Append(WalEvent evt)
     {
         switch (evt)
         {

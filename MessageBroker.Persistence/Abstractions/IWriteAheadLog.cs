@@ -4,5 +4,5 @@ namespace MessageBroker.Persistence.Abstractions;
 
 public interface IWriteAheadLog
 {
-    bool Append(WalEvent evt);
+    void Append(WalEvent evt);
 }

@@ -1,7 +1,7 @@
 ﻿using MessageBroker.Persistence.Abstractions;
 using MessageBroker.Persistence.Events;
 using MessageBroker.Persistence.WriteAheadLogs;
-using Microsoft.Extensions.Logging;
+using MessageBroker.Persistence.WriteAheadLogs.Exceptions;
 using Moq;
 using Shouldly;
 
@@ -12,14 +12,12 @@ public class WriteAheadLogManagerTests
     private readonly Mock<IFileAppender<EnqueueWalEvent>> _enqueueAppenderMock;
     private readonly Mock<IFileAppender<AckWalEvent>> _ackAppenderMock;
     private readonly Mock<IFileAppender<DeadWalEvent>> _deadAppenderMock;
-    private readonly Mock<ILogger<WriteAheadLogManager>> _loggerMock;
 
     public WriteAheadLogManagerTests()
     {
         _enqueueAppenderMock = new();
         _ackAppenderMock = new();
         _deadAppenderMock = new();
-        _loggerMock = new();
     }
 
     [Fact]
@@ -29,10 +27,9 @@ public class WriteAheadLogManagerTests
         IFileAppender<EnqueueWalEvent>? appender = null;
         IFileAppender<AckWalEvent> ackAppender = _ackAppenderMock.Object;
         IFileAppender<DeadWalEvent> deadAppender = _deadAppenderMock.Object;
-        ILogger<WriteAheadLogManager> logger = _loggerMock.Object;
         
         // Act
-        Action actual = () => new WriteAheadLogManager(appender, ackAppender, deadAppender, logger);
+        Action actual = () => new WriteAheadLogManager(appender, ackAppender, deadAppender);
         
         // Assert
         actual.ShouldThrow<ArgumentNullException>();
@@ -45,10 +42,9 @@ public class WriteAheadLogManagerTests
         IFileAppender<EnqueueWalEvent> appender = _enqueueAppenderMock.Object;
         IFileAppender<AckWalEvent>? ackAppender = null;
         IFileAppender<DeadWalEvent> deadAppender = _deadAppenderMock.Object;
-        ILogger<WriteAheadLogManager> logger = _loggerMock.Object;
         
         // Act
-        Action actual = () => new WriteAheadLogManager(appender, ackAppender, deadAppender, logger);
+        Action actual = () => new WriteAheadLogManager(appender, ackAppender, deadAppender);
         
         // Assert
         actual.ShouldThrow<ArgumentNullException>();
@@ -61,10 +57,9 @@ public class WriteAheadLogManagerTests
         IFileAppender<EnqueueWalEvent> appender = _enqueueAppenderMock.Object;
         IFileAppender<AckWalEvent> ackAppender = _ackAppenderMock.Object;
         IFileAppender<DeadWalEvent>? deadAppender = null;
-        ILogger<WriteAheadLogManager> logger = _loggerMock.Object;
         
         // Act
-        Action actual = () => new WriteAheadLogManager(appender, ackAppender, deadAppender, logger);
+        Action actual = () => new WriteAheadLogManager(appender, ackAppender, deadAppender);
         
         // Assert
         actual.ShouldThrow<ArgumentNullException>();
@@ -77,26 +72,9 @@ public class WriteAheadLogManagerTests
         IFileAppender<EnqueueWalEvent> appender = _enqueueAppenderMock.Object;
         IFileAppender<AckWalEvent> ackAppender = _ackAppenderMock.Object;
         IFileAppender<DeadWalEvent> deadAppender = _deadAppenderMock.Object;
-        ILogger<WriteAheadLogManager> logger = _loggerMock.Object;
         
         // Act
-        WriteAheadLogManager actual = new(appender, ackAppender, deadAppender, logger);
-        
-        // Assert
-        actual.ShouldNotBeNull();
-    }
-
-    [Fact]
-    public void Constructor_CreatesWriteAheadLogManager_WhenLoggerIsNull()
-    {
-        // Arrange
-        IFileAppender<EnqueueWalEvent> appender = _enqueueAppenderMock.Object;
-        IFileAppender<AckWalEvent> ackAppender = _ackAppenderMock.Object;
-        IFileAppender<DeadWalEvent> deadAppender = _deadAppenderMock.Object;
-        ILogger<WriteAheadLogManager>? logger = null;
-        
-        // Act
-        WriteAheadLogManager actual = new(appender, ackAppender, deadAppender, logger);
+        WriteAheadLogManager actual = new(appender, ackAppender, deadAppender);
         
         // Assert
         actual.ShouldNotBeNull();
@@ -109,16 +87,14 @@ public class WriteAheadLogManagerTests
         IFileAppender<EnqueueWalEvent> appender = _enqueueAppenderMock.Object;
         IFileAppender<AckWalEvent> ackAppender = _ackAppenderMock.Object;
         IFileAppender<DeadWalEvent> deadAppender = _deadAppenderMock.Object;
-        ILogger<WriteAheadLogManager> logger = _loggerMock.Object;
 
         EnqueueWalEvent evt = new(Guid.CreateVersion7(), [0x01, 0x02]);
-        WriteAheadLogManager sut = new(appender, ackAppender, deadAppender, logger);
+        WriteAheadLogManager sut = new(appender, ackAppender, deadAppender);
         
         // Act
-        bool actual = sut.Append(evt);
+        sut.Append(evt);
         
         // Assert
-        actual.ShouldBeTrue();
         _enqueueAppenderMock.Verify(ea => ea.Append(evt), Times.Once);
     }
     
@@ -129,16 +105,14 @@ public class WriteAheadLogManagerTests
         IFileAppender<EnqueueWalEvent> appender = _enqueueAppenderMock.Object;
         IFileAppender<AckWalEvent> ackAppender = _ackAppenderMock.Object;
         IFileAppender<DeadWalEvent> deadAppender = _deadAppenderMock.Object;
-        ILogger<WriteAheadLogManager> logger = _loggerMock.Object;
 
         RequeueWalEvent evt = new(Guid.CreateVersion7());
-        WriteAheadLogManager sut = new(appender, ackAppender, deadAppender, logger);
+        WriteAheadLogManager sut = new(appender, ackAppender, deadAppender);
         
         // Act
-        bool actual = sut.Append(evt);
+        sut.Append(evt);
         
         // Assert
-        actual.ShouldBeTrue();
         _enqueueAppenderMock.Verify(ea => ea.Append(evt), Times.Once);
     }
     
@@ -149,16 +123,14 @@ public class WriteAheadLogManagerTests
         IFileAppender<EnqueueWalEvent> appender = _enqueueAppenderMock.Object;
         IFileAppender<AckWalEvent> ackAppender = _ackAppenderMock.Object;
         IFileAppender<DeadWalEvent> deadAppender = _deadAppenderMock.Object;
-        ILogger<WriteAheadLogManager> logger = _loggerMock.Object;
 
         AckWalEvent evt = new(Guid.CreateVersion7());
-        WriteAheadLogManager sut = new(appender, ackAppender, deadAppender, logger);
+        WriteAheadLogManager sut = new(appender, ackAppender, deadAppender);
         
         // Act
-        bool actual = sut.Append(evt);
+        sut.Append(evt);
         
         // Assert
-        actual.ShouldBeTrue();
         _ackAppenderMock.Verify(ea => ea.Append(evt), Times.Once);
     }
     
@@ -169,91 +141,56 @@ public class WriteAheadLogManagerTests
         IFileAppender<EnqueueWalEvent> appender = _enqueueAppenderMock.Object;
         IFileAppender<AckWalEvent> ackAppender = _ackAppenderMock.Object;
         IFileAppender<DeadWalEvent> deadAppender = _deadAppenderMock.Object;
-        ILogger<WriteAheadLogManager> logger = _loggerMock.Object;
 
         DeadWalEvent evt = new(Guid.CreateVersion7());
-        WriteAheadLogManager sut = new(appender, ackAppender, deadAppender, logger);
-        
-        // Act
-        bool actual = sut.Append(evt);
-        
-        // Assert
-        actual.ShouldBeTrue();
-        _deadAppenderMock.Verify(ea => ea.Append(evt), Times.Once);
-    }
-
-    [Fact]
-    public void Append_ReturnsFalse_WhenTypeOfWalEventIsUnknown()
-    {
-        // Arrange
-        IFileAppender<EnqueueWalEvent> appender = _enqueueAppenderMock.Object;
-        IFileAppender<AckWalEvent> ackAppender = _ackAppenderMock.Object;
-        IFileAppender<DeadWalEvent> deadAppender = _deadAppenderMock.Object;
-        ILogger<WriteAheadLogManager> logger = _loggerMock.Object;
-
-        TestWalEvent evt = new();
-        WriteAheadLogManager sut = new(appender, ackAppender, deadAppender, logger);
-        
-        // Act
-        bool actual = sut.Append(evt);
-        
-        // Assert
-        actual.ShouldBeFalse();
-    }
-
-    [Fact]
-    public void Append_ReturnsFalse_WhenExceptionWasThrownDuringWalEventHandling()
-    {
-        // Arrange
-        _enqueueAppenderMock
-            .Setup(ea => ea.Append(It.IsAny<EnqueueWalEvent>()))
-            .Throws(new Exception());
-        
-        IFileAppender<EnqueueWalEvent> appender = _enqueueAppenderMock.Object;
-        IFileAppender<AckWalEvent> ackAppender = _ackAppenderMock.Object;
-        IFileAppender<DeadWalEvent> deadAppender = _deadAppenderMock.Object;
-        ILogger<WriteAheadLogManager> logger = _loggerMock.Object;
-
-        EnqueueWalEvent evt = new(Guid.CreateVersion7(), [0x01, 0x02]);
-        WriteAheadLogManager sut = new(appender, ackAppender, deadAppender, logger);
-        
-        // Act
-        bool actual = sut.Append(evt);
-        
-        // Assert
-        actual.ShouldBeFalse();
-    }
-
-    [Fact]
-    public void Append_CallsLogger_WhenExceptionWasThrownDuringWalEventHandling()
-    {
-        // Arrange
-        Exception ex = new Exception();
-        _enqueueAppenderMock
-            .Setup(ea => ea.Append(It.IsAny<EnqueueWalEvent>()))
-            .Throws(ex);
-        
-        IFileAppender<EnqueueWalEvent> appender = _enqueueAppenderMock.Object;
-        IFileAppender<AckWalEvent> ackAppender = _ackAppenderMock.Object;
-        IFileAppender<DeadWalEvent> deadAppender = _deadAppenderMock.Object;
-        ILogger<WriteAheadLogManager> logger = _loggerMock.Object;
-
-        EnqueueWalEvent evt = new(Guid.CreateVersion7(), [0x01, 0x02]);
-        WriteAheadLogManager sut = new(appender, ackAppender, deadAppender, logger);
+        WriteAheadLogManager sut = new(appender, ackAppender, deadAppender);
         
         // Act
         sut.Append(evt);
         
         // Assert
-        _loggerMock.Verify(
-            l => l.Log(
-                LogLevel.Error,
-                It.IsAny<EventId>(),
-                It.Is<It.IsAnyType>((v, t) => true),
-                ex,
-                It.IsAny<Func<It.IsAnyType, Exception?, string>>()
-            ),
-            Times.Once
-        );
+        _deadAppenderMock.Verify(ea => ea.Append(evt), Times.Once);
+    }
+
+    [Fact]
+    public void Append_ThrowsException_WhenTypeOfWalEventIsUnknown()
+    {
+        // Arrange
+        IFileAppender<EnqueueWalEvent> appender = _enqueueAppenderMock.Object;
+        IFileAppender<AckWalEvent> ackAppender = _ackAppenderMock.Object;
+        IFileAppender<DeadWalEvent> deadAppender = _deadAppenderMock.Object;
+
+        TestWalEvent evt = new();
+        WriteAheadLogManager sut = new(appender, ackAppender, deadAppender);
+        
+        // Act
+        Action actual = () => sut.Append(evt);
+        
+        // Assert
+        actual.ShouldThrow<WalEventUnknownTypeException>();
+    }
+
+    [Fact]
+    public void Append_ThrowsException_WhenExceptionWasThrownDuringWalEventHandling()
+    {
+        // Arrange
+        Exception exception = new("Custom exception");
+        
+        _enqueueAppenderMock
+            .Setup(ea => ea.Append(It.IsAny<EnqueueWalEvent>()))
+            .Throws(exception);
+        
+        IFileAppender<EnqueueWalEvent> appender = _enqueueAppenderMock.Object;
+        IFileAppender<AckWalEvent> ackAppender = _ackAppenderMock.Object;
+        IFileAppender<DeadWalEvent> deadAppender = _deadAppenderMock.Object;
+
+        EnqueueWalEvent evt = new(Guid.CreateVersion7(), [0x01, 0x02]);
+        WriteAheadLogManager sut = new(appender, ackAppender, deadAppender);
+        
+        // Act
+        Action actual = () => sut.Append(evt);
+        
+        // Assert
+        actual.ShouldThrow<Exception>(exception.Message);
     }
 }
