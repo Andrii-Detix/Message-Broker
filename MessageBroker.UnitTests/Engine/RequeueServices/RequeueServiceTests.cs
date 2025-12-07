@@ -3,7 +3,6 @@ using MessageBroker.Core.Messages.Models;
 using MessageBroker.Engine.RequeueServices;
 using MessageBroker.Persistence.Abstractions;
 using MessageBroker.Persistence.Events;
-using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Time.Testing;
 using Moq;
 using Shouldly;
@@ -15,14 +14,12 @@ public class RequeueServiceTests
     private readonly Mock<IMessageQueue> _queueMock;
     private readonly Mock<IWriteAheadLog> _walMock;
     private readonly Mock<IExpiredMessagePolicy> _expiredPolicyMock;
-    private readonly Mock<ILogger<RequeueService>> _loggerMock;
 
     public RequeueServiceTests()
     {
         _queueMock = new();
         _walMock = new();
         _expiredPolicyMock = new();
-        _loggerMock = new();
     }
 
     [Fact]
@@ -31,10 +28,9 @@ public class RequeueServiceTests
         // Arrange
         IWriteAheadLog wal = _walMock.Object;
         IExpiredMessagePolicy expiredPolicy = _expiredPolicyMock.Object;
-        ILogger<RequeueService> logger = _loggerMock.Object;
         
         // Act
-        Action actual = () => new RequeueService(null, wal, expiredPolicy, logger);
+        Action actual = () => new RequeueService(null, wal, expiredPolicy);
         
         // Assert
         actual.ShouldThrow<ArgumentNullException>();
@@ -46,10 +42,9 @@ public class RequeueServiceTests
         // Arrange
         IMessageQueue queue = _queueMock.Object;
         IExpiredMessagePolicy expiredPolicy = _expiredPolicyMock.Object;
-        ILogger<RequeueService> logger = _loggerMock.Object;
         
         // Act
-        Action actual = () => new RequeueService(queue, null, expiredPolicy, logger);
+        Action actual = () => new RequeueService(queue, null, expiredPolicy);
         
         // Assert
         actual.ShouldThrow<ArgumentNullException>();
@@ -61,10 +56,9 @@ public class RequeueServiceTests
         // Arrange
         IMessageQueue queue = _queueMock.Object;
         IWriteAheadLog wal = _walMock.Object;
-        ILogger<RequeueService> logger = _loggerMock.Object;
         
         // Act
-        Action actual = () => new RequeueService(queue, wal, null, logger);
+        Action actual = () => new RequeueService(queue, wal, null);
         
         // Assert
         actual.ShouldThrow<ArgumentNullException>();
@@ -72,22 +66,6 @@ public class RequeueServiceTests
     
     [Fact]
     public void Constructor_CreatesRequeueService_WhenInputDataIsValid()
-    {
-        // Arrange
-        IMessageQueue queue = _queueMock.Object;
-        IWriteAheadLog wal = _walMock.Object;
-        IExpiredMessagePolicy expiredPolicy = _expiredPolicyMock.Object;
-        ILogger<RequeueService> logger = _loggerMock.Object;
-        
-        // Act
-        RequeueService actual = new(queue, wal, expiredPolicy, logger);
-        
-        // Assert
-        actual.ShouldNotBeNull();
-    }
-
-    [Fact]
-    public void Constructor_CreatesRequeueService_WithoutInputLogger()
     {
         // Arrange
         IMessageQueue queue = _queueMock.Object;
