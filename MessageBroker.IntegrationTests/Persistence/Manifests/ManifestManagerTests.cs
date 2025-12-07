@@ -9,30 +9,27 @@ namespace MessageBroker.IntegrationTests.Persistence.Manifests;
 public class ManifestManagerTests : IDisposable
 {
     private readonly string _directory;
-    private readonly WalConfiguration _config;
+    private readonly WalOptions _config;
 
     public ManifestManagerTests()
     {
         _directory = Path.Combine(Path.GetTempPath(), Path.GetRandomFileName());
         Directory.CreateDirectory(_directory);
 
-        _config = new WalConfiguration
+        _config = new WalOptions
         {
             Directory = _directory,
-            FileExtension = "log",
-            Manifest = new ManifestConfiguration
+            Manifest = new ManifestOptions
             {
                 FileName = "manifest.json"
             },
-            FileBaseNames = new WalFileBaseNames 
+            FileNaming = new FileNamingOptions 
             { 
-                Enqueue = "enqueue", 
-                Ack = "ack", 
-                Dead = "dead" 
-            },
-            GarbageCollection = new GarbageCollectionConfiguration
-            {
-                FileName = "enqueue-merged"
+                Extension = "log",
+                EnqueuePrefix = "enqueue", 
+                AckPrefix = "ack", 
+                DeadPrefix = "dead",
+                MergePrefix = "enqueue-merged"
             }
         };
     }
