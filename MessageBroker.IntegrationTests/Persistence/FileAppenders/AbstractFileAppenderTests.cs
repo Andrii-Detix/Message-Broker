@@ -3,6 +3,7 @@ using MessageBroker.Persistence.CrcProviders;
 using MessageBroker.Persistence.FileAppenders.Exceptions;
 using MessageBroker.Persistence.FilePathCreators;
 using Microsoft.Extensions.Time.Testing;
+using Moq;
 using Shouldly;
 
 namespace MessageBroker.IntegrationTests.Persistence.FileAppenders;
@@ -307,7 +308,68 @@ public class AbstractFileAppenderTests : IDisposable
         // Assert
         actual.ShouldThrow<FileAppenderDisposedException>();
     }
+    
+    [Fact]
+    public void SaveData_RetriesAndSucceeds_WhenFirstRotationFails()
+    {
+        // Arrange
+        CrcProvider crcProvider = new();
+        Mock<IFilePathCreator> pathCreatorMock = new();
 
+        string initialFile = Path.Combine(_directory, "start.log");
+        string badPath = Path.Combine(_directory, "bad|<>.log");
+        string recoveryFile = Path.Combine(_directory, "recovery.log");
+
+        pathCreatorMock.SetupSequence(pc => pc.CreatePath())
+            .Returns(initialFile)
+            .Returns(badPath)
+            .Returns(recoveryFile);
+        
+        TestFileAppender sut = new(crcProvider, pathCreatorMock.Object, 1);
+    
+        sut.WriteRawBytes([0xAA]); 
+
+        // Act
+        sut.WriteRawBytes([0xBB]); 
+
+        // Assert
+        string currentFile = sut.CurrentFile;
+        sut.Dispose();
+    
+        currentFile.ShouldBe(recoveryFile);
+        File.Exists(recoveryFile).ShouldBeTrue();
+    
+        File.ReadAllBytes(recoveryFile).Length.ShouldBe(9); // Header (8) + Data (1)
+    }
+    
+    [Fact]
+    public void SaveData_DisposesAppender_WhenRetryAlsoFails()
+    {
+        // Arrange
+        CrcProvider crcProvider = new();
+        Mock<IFilePathCreator> pathCreatorMock = new();
+
+        string initialFile = Path.Combine(_directory, "start.log");
+        string badPath1 = Path.Combine(_directory, "bad1|<>.log");
+        string badPath2 = Path.Combine(_directory, "bad2|<>.log");
+
+        pathCreatorMock.SetupSequence(x => x.CreatePath())
+            .Returns(initialFile)
+            .Returns(badPath1)
+            .Returns(badPath2);
+        
+        TestFileAppender sut = new(crcProvider, pathCreatorMock.Object, 1);
+        sut.WriteRawBytes([0xAA]);
+
+        // Act & Assert
+        Action actual = () => sut.WriteRawBytes([0xBB]);
+
+        // Assert
+        actual.ShouldThrow<Exception>();
+    
+        Should.Throw<FileAppenderDisposedException>(() => sut.WriteRawBytes([0xCC]));
+    }
+    
     [Fact]
     public void Dispose_SetCurrentFileAsEmpty()
     {

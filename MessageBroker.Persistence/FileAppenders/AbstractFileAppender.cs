@@ -16,7 +16,7 @@ public abstract class AbstractFileAppender<TEvent>
 
     private FileStream _fileStream;
     private int _writeCount = 0;
-    private bool _isDisposed = false;
+    private volatile bool _isDisposed = false;
 
     protected AbstractFileAppender(
         ICrcProvider? crcProvider,
@@ -71,6 +71,11 @@ public abstract class AbstractFileAppender<TEvent>
 
     protected void SaveData(ReadOnlySpan<byte> data)
     {
+        if (_isDisposed)
+        {
+            throw new FileAppenderDisposedException();
+        }
+        
         lock (_streamLocker)
         {
             if (_isDisposed)
@@ -78,21 +83,42 @@ public abstract class AbstractFileAppender<TEvent>
                 throw new FileAppenderDisposedException();
             }
             
-            if (_writeCount >= _maxWriteCountPerFile)
+            try
             {
-                Rotate();
+                if (_writeCount >= _maxWriteCountPerFile)
+                {
+                    Rotate();
+                }
+            
+                WriteToStream(data);
             }
-
-            int headerSize = _crcProvider.HeaderSize;
-            Span<byte> header = stackalloc byte[headerSize];
-            _crcProvider.WriteHeader(header, data);
-            
-            _fileStream.Write(header);
-            _fileStream.Write(data);
-            
-            _fileStream.Flush();
-            _writeCount++;
+            catch
+            {
+                try
+                {
+                    Rotate();
+                    WriteToStream(data);
+                }
+                catch
+                {
+                    Dispose();
+                    throw;
+                }
+            }
         }
+    }
+
+    private void WriteToStream(ReadOnlySpan<byte> data)
+    {
+        int headerSize = _crcProvider.HeaderSize;
+        Span<byte> header = stackalloc byte[headerSize];
+        _crcProvider.WriteHeader(header, data);
+            
+        _fileStream.Write(header);
+        _fileStream.Write(data);
+            
+        _fileStream.Flush();
+        _writeCount++;
     }
 
     private void Rotate()
