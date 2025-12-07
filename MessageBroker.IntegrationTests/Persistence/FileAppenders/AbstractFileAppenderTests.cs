@@ -1,4 +1,5 @@
 ﻿using MessageBroker.Persistence.Abstractions;
+using MessageBroker.Persistence.Common.Exceptions;
 using MessageBroker.Persistence.CrcProviders;
 using MessageBroker.Persistence.FileAppenders.Exceptions;
 using MessageBroker.Persistence.FilePathCreators;
@@ -343,7 +344,7 @@ public class AbstractFileAppenderTests : IDisposable
     }
     
     [Fact]
-    public void SaveData_DisposesAppender_WhenRetryAlsoFails()
+    public void SaveData_DisposesAppenderAndThrowsException_WhenRetryAlsoFails()
     {
         // Arrange
         CrcProvider crcProvider = new();
@@ -361,11 +362,11 @@ public class AbstractFileAppenderTests : IDisposable
         TestFileAppender sut = new(crcProvider, pathCreatorMock.Object, 1);
         sut.WriteRawBytes([0xAA]);
 
-        // Act & Assert
+        // Act
         Action actual = () => sut.WriteRawBytes([0xBB]);
 
         // Assert
-        actual.ShouldThrow<Exception>();
+        actual.ShouldThrow<WalStorageException>();
     
         Should.Throw<FileAppenderDisposedException>(() => sut.WriteRawBytes([0xCC]));
     }

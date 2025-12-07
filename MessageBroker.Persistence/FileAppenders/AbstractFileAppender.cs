@@ -1,4 +1,5 @@
 ﻿using MessageBroker.Persistence.Abstractions;
+using MessageBroker.Persistence.Common.Exceptions;
 using MessageBroker.Persistence.Events;
 using MessageBroker.Persistence.FileAppenders.Exceptions;
 
@@ -99,10 +100,12 @@ public abstract class AbstractFileAppender<TEvent>
                     Rotate();
                     WriteToStream(data);
                 }
-                catch
+                catch (Exception ex)
                 {
                     Dispose();
-                    throw;
+                    throw new WalStorageException(
+                        $"Critical failure writing to WAL. File: '{CurrentFile}'. Error: {ex.Message}", 
+                        ex);
                 }
             }
         }
