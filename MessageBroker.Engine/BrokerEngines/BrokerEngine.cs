@@ -68,12 +68,7 @@ public class BrokerEngine : IBrokerEngine
         
         lock (_publishLocker)
         {
-            bool walSuccess = _wal.Append(enqueueEvent);
-
-            if (!walSuccess)
-            {
-                throw new BrokerStorageException();
-            }
+            _wal.Append(enqueueEvent);
             
             enqueueSuccess = _messageQueue.TryEnqueue(message);
         }
@@ -102,10 +97,7 @@ public class BrokerEngine : IBrokerEngine
     {
         AckWalEvent ackEvent = new(messageId);
 
-        if (!_wal.Append(ackEvent))
-        {
-            throw new BrokerStorageException();
-        }
+        _wal.Append(ackEvent);
         
         Message? message = _messageQueue.Ack(messageId);
 

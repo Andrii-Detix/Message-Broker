@@ -116,8 +116,6 @@ public class RequeueServiceTests
             .Returns(messages);
         _queueMock.Setup(q => q.TryEnqueue(It.IsAny<Message>()))
             .Returns(true);
-        _walMock.Setup(w => w.Append(It.IsAny<RequeueWalEvent>()))
-            .Returns(true);
 
         IMessageQueue queue = _queueMock.Object;
         IWriteAheadLog wal = _walMock.Object;
@@ -199,33 +197,5 @@ public class RequeueServiceTests
             DeadWalEvent deadEvent = new(message.Id);
             _walMock.Verify(w => w.Append(deadEvent), Times.Once);
         }
-    }
-
-    [Fact]
-    public void Requeue_EnqueuesOnlyToMemory_WhenWalAppendsFail()
-    {
-        // Arrange
-        FakeTimeProvider timeProvider = new();
-        Message message = Message.Create(Guid.CreateVersion7(), [], 2, timeProvider);
-        
-        IExpiredMessagePolicy expiredPolicy = _expiredPolicyMock.Object;
-        _queueMock.Setup(q => q.TakeExpiredMessages(expiredPolicy))
-            .Returns([message]);
-        _queueMock.Setup(q => q.TryEnqueue(It.IsAny<Message>()))
-            .Returns(true);
-        _walMock.Setup(w => w.Append(It.IsAny<RequeueWalEvent>()))
-            .Returns(false);
-        
-        IMessageQueue queue = _queueMock.Object;
-        IWriteAheadLog wal = _walMock.Object;
-        RequeueService sut = new(queue, wal, expiredPolicy);
-        
-        // Act
-        sut.Requeue();
-        
-        // Assert
-        RequeueWalEvent requeueEvent = new(message.Id);
-        _walMock.Verify(w => w.Append(requeueEvent), Times.Once);
-        _queueMock.Verify(q => q.TryEnqueue(message), Times.Once);
     }
 }

@@ -38,14 +38,7 @@ public class RequeueService : IRequeueService
         {
             RequeueWalEvent requeueEvent = new(message.Id);
 
-            bool walSuccess = _wal.Append(requeueEvent);
-
-            if (!walSuccess)
-            {
-                _logger?.LogWarning(
-                    "Failed to persist Requeue event for message {Id}. Requeuing in memory only.", 
-                    message.Id);
-            }
+            _wal.Append(requeueEvent);
 
             bool requeueSuccess = _messageQueue.TryEnqueue(message);
 
