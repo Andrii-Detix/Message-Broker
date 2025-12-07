@@ -318,7 +318,7 @@ public class AbstractFileAppenderTests : IDisposable
         Mock<IFilePathCreator> pathCreatorMock = new();
 
         string initialFile = Path.Combine(_directory, "start.log");
-        string badPath = Path.Combine(_directory, "bad|<>.log");
+        string badPath = Path.Combine(_directory, "bad\0file.log");
         string recoveryFile = Path.Combine(_directory, "recovery.log");
 
         pathCreatorMock.SetupSequence(pc => pc.CreatePath())
@@ -351,8 +351,8 @@ public class AbstractFileAppenderTests : IDisposable
         Mock<IFilePathCreator> pathCreatorMock = new();
 
         string initialFile = Path.Combine(_directory, "start.log");
-        string badPath1 = Path.Combine(_directory, "bad1|<>.log");
-        string badPath2 = Path.Combine(_directory, "bad2|<>.log");
+        string badPath1 = Path.Combine(_directory, "bad1\0file.log");
+        string badPath2 = Path.Combine(_directory, "bad2\0file.log");
 
         pathCreatorMock.SetupSequence(x => x.CreatePath())
             .Returns(initialFile)
