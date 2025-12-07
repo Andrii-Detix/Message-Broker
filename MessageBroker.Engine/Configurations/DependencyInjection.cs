@@ -49,7 +49,7 @@ public static class DependencyInjection
 
             services.AddSingleton<IMessageQueueFactory, MessageQueueFactory>();
 
-            services.AddSingleton<IRecoveryService, RecoveryService>();
+            services.AddTransient<IRecoveryService, RecoveryService>();
 
             services.AddSingleton<IMessageQueue>(sp =>
             {
@@ -176,8 +176,8 @@ public static class DependencyInjection
             services.AddSingleton<BrokerEngine>(sp =>
             {
                 TimeProvider timeProvider = sp.GetRequiredService<TimeProvider>();
-                IWriteAheadLog wal = sp.GetRequiredService<IWriteAheadLog>();
                 IMessageQueue messageQueue = sp.GetRequiredService<IMessageQueue>();
+                IWriteAheadLog wal = sp.GetRequiredService<IWriteAheadLog>();
                 BrokerOptions options = sp.GetRequiredService<IOptions<BrokerOptions>>().Value;
 
                 int maxPayloadSize = options.Message.MaxPayloadSize;
