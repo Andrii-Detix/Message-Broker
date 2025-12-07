@@ -41,15 +41,15 @@ public static class DependencyInjection
             services.AddSingleton<ICriticalErrorService, GracefulShutdownService>();
             services.AddSingleton<ICrcProvider, CrcProvider>();
             
-            services.AddScoped(CreateReader<EnqueueWalEvent>);
-            services.AddScoped(CreateReader<AckWalEvent>);
-            services.AddScoped(CreateReader<DeadWalEvent>);
+            services.AddSingleton(CreateReader<EnqueueWalEvent>);
+            services.AddSingleton(CreateReader<AckWalEvent>);
+            services.AddSingleton(CreateReader<DeadWalEvent>);
 
-            services.AddScoped<IManifestManager, ManifestManager>();
+            services.AddSingleton<IManifestManager, ManifestManager>();
 
-            services.AddScoped<IMessageQueueFactory, MessageQueueFactory>();
+            services.AddSingleton<IMessageQueueFactory, MessageQueueFactory>();
 
-            services.AddScoped<IRecoveryService, RecoveryService>();
+            services.AddSingleton<IRecoveryService, RecoveryService>();
 
             services.AddSingleton<IMessageQueue>(sp =>
             {
