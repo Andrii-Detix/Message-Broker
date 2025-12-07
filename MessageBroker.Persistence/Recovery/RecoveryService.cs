@@ -13,7 +13,7 @@ public class RecoveryService : IRecoveryService
     private readonly IWalReader<AckWalEvent> _ackWalReader;
     private readonly IWalReader<DeadWalEvent> _deadWalReader;
     private readonly IMessageQueueFactory _queueFactory;
-    private readonly MessageConfiguration _messageConfiguration;
+    private readonly MessageOptions _messageOptions;
     private readonly TimeProvider _timeProvider;
 
     public RecoveryService(
@@ -22,7 +22,7 @@ public class RecoveryService : IRecoveryService
         IWalReader<AckWalEvent> ackWalReader,
         IWalReader<DeadWalEvent> deadWalReader,
         IMessageQueueFactory queueFactory,
-        MessageConfiguration messageConfiguration,
+        MessageOptions messageOptions,
         TimeProvider timeProvider)
     {
         ArgumentNullException.ThrowIfNull(manifestManager);
@@ -30,7 +30,7 @@ public class RecoveryService : IRecoveryService
         ArgumentNullException.ThrowIfNull(ackWalReader);
         ArgumentNullException.ThrowIfNull(deadWalReader);
         ArgumentNullException.ThrowIfNull(queueFactory);
-        ArgumentNullException.ThrowIfNull(messageConfiguration);
+        ArgumentNullException.ThrowIfNull(messageOptions);
         ArgumentNullException.ThrowIfNull(timeProvider);
         
         _manifestManager = manifestManager;
@@ -38,7 +38,7 @@ public class RecoveryService : IRecoveryService
         _ackWalReader = ackWalReader;
         _deadWalReader = deadWalReader;
         _queueFactory = queueFactory;
-        _messageConfiguration = messageConfiguration;
+        _messageOptions = messageOptions;
         _timeProvider = timeProvider;
     }
     
@@ -126,6 +126,6 @@ public class RecoveryService : IRecoveryService
             _timeProvider.GetUtcNow(),
             null,
             dto.DeliveryAttempts,
-            _messageConfiguration.MaxDeliveryAttempts);
+            _messageOptions.MaxDeliveryAttempts);
     } 
 }

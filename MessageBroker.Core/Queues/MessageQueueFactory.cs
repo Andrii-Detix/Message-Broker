@@ -5,10 +5,10 @@ namespace MessageBroker.Core.Queues;
 
 public class MessageQueueFactory : IMessageQueueFactory
 {
-    private readonly MessageQueueConfiguration _config;
+    private readonly MessageQueueOptions _config;
     private readonly TimeProvider _timeProvider;
     
-    public MessageQueueFactory(MessageQueueConfiguration config, TimeProvider timeProvider)
+    public MessageQueueFactory(MessageQueueOptions config, TimeProvider timeProvider)
     {
         ArgumentNullException.ThrowIfNull(config);
         ArgumentNullException.ThrowIfNull(timeProvider);

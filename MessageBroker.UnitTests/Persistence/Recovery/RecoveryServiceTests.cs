@@ -19,7 +19,7 @@ public class RecoveryServiceTests
     private readonly Mock<IWalReader<DeadWalEvent>> _deadReaderMock;
     private readonly Mock<IMessageQueueFactory> _queueFactoryMock;
     private readonly FakeTimeProvider _timeProvider;
-    private readonly MessageConfiguration _messageConfiguration;
+    private readonly MessageOptions _messageOptions;
     
     public RecoveryServiceTests()
     {
@@ -30,7 +30,7 @@ public class RecoveryServiceTests
         _queueFactoryMock = new();
         _timeProvider = new();
         
-        _messageConfiguration = new()
+        _messageOptions = new()
         { 
             MaxDeliveryAttempts = 10 
         };
@@ -76,8 +76,6 @@ public class RecoveryServiceTests
         SetupWalFiles(enqueueFiles: ["enq-1"]);
         SetupEnqueueEvents("enq-1", new EnqueueWalEvent(messageId, []));
         
-        _messageConfiguration.MaxDeliveryAttempts = 50;
-        
         RecoveryService sut = CreateRecoveryService();
         
         // Act
@@ -85,7 +83,7 @@ public class RecoveryServiceTests
         
         // Assert
         actual.TryConsume(out Message? message);
-        message!.MaxDeliveryAttempts.ShouldBe(50);
+        message!.MaxDeliveryAttempts.ShouldBe(_messageOptions.MaxDeliveryAttempts);
     }
 
     [Fact]
@@ -367,7 +365,7 @@ public class RecoveryServiceTests
             _ackReaderMock.Object,
             _deadReaderMock.Object,
             _queueFactoryMock.Object,
-            _messageConfiguration,
+            _messageOptions,
             _timeProvider
         );
     }
