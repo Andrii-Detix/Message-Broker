@@ -25,7 +25,7 @@ public class MessageQueueFactoryTests
     public void Constructor_ThrowsException_WhenTimeProviderIsNull()
     {
         // Arrange
-        MessageQueueConfiguration config = new();
+        MessageQueueOptions config = new();
         
         // Act
         Action actual = () => new MessageQueueFactory(config, null!);
@@ -39,7 +39,7 @@ public class MessageQueueFactoryTests
     {
         // Arrange
         FakeTimeProvider timeProvider = new();
-        MessageQueueConfiguration config = new();
+        MessageQueueOptions config = new();
         
         // Act
         MessageQueueFactory actual = new(config, timeProvider);
@@ -53,7 +53,7 @@ public class MessageQueueFactoryTests
     {
         // Arrange
         FakeTimeProvider timeProvider = new();
-        MessageQueueConfiguration config = new();
+        MessageQueueOptions config = new();
         MessageQueueFactory sut = new(config, timeProvider);
         
         // Act

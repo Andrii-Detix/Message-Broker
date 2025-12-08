@@ -1,6 +1,6 @@
 ﻿namespace MessageBroker.Core.Configurations;
 
-public record MessageQueueConfiguration
+public record MessageQueueOptions
 {
     public int MaxSwapCount { get; init; } = 5;
 }

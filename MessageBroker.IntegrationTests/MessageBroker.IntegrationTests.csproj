@@ -9,6 +9,9 @@
 
     <ItemGroup>
         <PackageReference Include="coverlet.collector" />
+        <PackageReference Include="Microsoft.Extensions.Configuration" />
+        <PackageReference Include="Microsoft.Extensions.Hosting.Abstractions" />
+        <PackageReference Include="Microsoft.Extensions.Logging" />
         <PackageReference Include="Microsoft.Extensions.TimeProvider.Testing" />
         <PackageReference Include="Microsoft.NET.Test.Sdk" />
         <PackageReference Include="Moq" />
@@ -22,7 +25,14 @@
     </ItemGroup>
 
     <ItemGroup>
+      <ProjectReference Include="..\MessageBroker.Engine\MessageBroker.Engine.csproj" />
       <ProjectReference Include="..\MessageBroker.Persistence\MessageBroker.Persistence.csproj" />
+    </ItemGroup>
+
+    <ItemGroup>
+      <Reference Include="Microsoft.Extensions.DependencyInjection">
+        <HintPath>C:\Program Files\dotnet\shared\Microsoft.AspNetCore.App\10.0.0\Microsoft.Extensions.DependencyInjection.dll</HintPath>
+      </Reference>
     </ItemGroup>
 
 </Project>

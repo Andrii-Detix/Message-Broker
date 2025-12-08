@@ -8,13 +8,13 @@ namespace MessageBroker.Persistence.Manifests;
 
 public class ManifestManager : IManifestManager
 {
-    private readonly WalConfiguration _config;
+    private readonly WalOptions _config;
     private readonly string _manifestPath;
     private readonly JsonSerializerOptions _jsonOptions;
 
-    public ManifestManager(IOptions<WalConfiguration> options)
+    public ManifestManager(IOptions<WalOptions> options)
     {
-        WalConfiguration config = options.Value;
+        WalOptions config = options.Value;
         
         _config = config;
         _manifestPath = Path.Combine(config.Directory, config.Manifest.FileName);
@@ -73,9 +73,9 @@ public class ManifestManager : IManifestManager
         
         return new()
         {
-            EnqueueFiles = GetFilesStartingFrom(_config.FileBaseNames.Enqueue, manifest.Enqueue),
-            AckFiles = GetFilesStartingFrom(_config.FileBaseNames.Ack, manifest.Ack),
-            DeadFiles = GetFilesStartingFrom(_config.FileBaseNames.Dead, manifest.Dead),
+            EnqueueFiles = GetFilesStartingFrom(_config.FileNaming.EnqueuePrefix, manifest.Enqueue),
+            AckFiles = GetFilesStartingFrom(_config.FileNaming.AckPrefix, manifest.Ack),
+            DeadFiles = GetFilesStartingFrom(_config.FileNaming.DeadPrefix, manifest.Dead),
             MergedFile = mergedPath
         };
     }
@@ -87,7 +87,7 @@ public class ManifestManager : IManifestManager
             return [];
         }
 
-        string extension = _config.FileExtension.TrimStart('.');
+        string extension = _config.FileNaming.Extension.TrimStart('.');
         string pattern = $"{prefix}-*-*.{extension}";
 
         List<string> files = Directory
