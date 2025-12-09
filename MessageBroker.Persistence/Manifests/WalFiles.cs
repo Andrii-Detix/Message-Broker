@@ -7,6 +7,4 @@ public record WalFiles
     public List<string> AckFiles { get; init; } = [];
     
     public List<string> DeadFiles { get; init; } = [];
-    
-    public string MergedFile { get; init; } = string.Empty;
 }

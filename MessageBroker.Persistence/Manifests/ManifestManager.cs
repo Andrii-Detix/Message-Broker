@@ -51,7 +51,9 @@ public class ManifestManager : IManifestManager
             Enqueue = NormalizeFileName(manifest.Enqueue),
             Ack = NormalizeFileName(manifest.Ack),
             Dead = NormalizeFileName(manifest.Dead),
-            Merged = NormalizeFileName(manifest.Merged)
+            EnqueueMerged = NormalizeFileName(manifest.EnqueueMerged),
+            AckMerged = NormalizeFileName(manifest.AckMerged),
+            DeadMerged = NormalizeFileName(manifest.DeadMerged)
         };
 
         string json = JsonSerializer.Serialize(manifest, _jsonOptions);
@@ -61,22 +63,12 @@ public class ManifestManager : IManifestManager
     public WalFiles LoadWalFiles()
     {
         WalManifest manifest = Load();
-
-        string mergedPath = !string.IsNullOrEmpty(manifest.Merged) 
-            ? Path.Combine(_config.Directory, manifest.Merged) 
-            : string.Empty;
-        
-        if (!string.IsNullOrEmpty(mergedPath) && !File.Exists(mergedPath))
-        {
-            mergedPath = string.Empty;
-        }
         
         return new()
         {
-            EnqueueFiles = GetFilesStartingFrom(_config.FileNaming.EnqueuePrefix, manifest.Enqueue),
-            AckFiles = GetFilesStartingFrom(_config.FileNaming.AckPrefix, manifest.Ack),
-            DeadFiles = GetFilesStartingFrom(_config.FileNaming.DeadPrefix, manifest.Dead),
-            MergedFile = mergedPath
+            EnqueueFiles = GetAllFiles(_config.FileNaming.EnqueuePrefix, manifest.Enqueue, manifest.EnqueueMerged),
+            AckFiles = GetAllFiles(_config.FileNaming.AckPrefix, manifest.Ack, manifest.AckMerged),
+            DeadFiles = GetAllFiles(_config.FileNaming.DeadPrefix, manifest.Dead, manifest.DeadMerged)
         };
     }
 
@@ -111,6 +103,27 @@ public class ManifestManager : IManifestManager
             }
         }
 
+        return files;
+    }
+
+    private List<string> GetAllFiles(string prefix, string checkpoint, string merged)
+    {
+        List<string> files = GetFilesStartingFrom(prefix, checkpoint);
+        
+        string mergedPath = !string.IsNullOrWhiteSpace(merged) 
+            ? Path.Combine(_config.Directory, merged) 
+            : string.Empty;
+        
+        if (!string.IsNullOrEmpty(mergedPath))
+        {
+            files.RemoveAll(f => f.Equals(mergedPath, StringComparison.OrdinalIgnoreCase));
+        }
+        
+        if (!string.IsNullOrEmpty(mergedPath) && File.Exists(mergedPath))
+        {
+            files.Insert(0, mergedPath);
+        }
+        
         return files;
     }
 

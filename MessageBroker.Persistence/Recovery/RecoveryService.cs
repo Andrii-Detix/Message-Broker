@@ -92,15 +92,7 @@ public class RecoveryService : IRecoveryService
         
         HashSet<Guid> completedIds = ackIds.Concat(deadIds).ToHashSet();
 
-        List<string> enqueueFiles = [];
-        if (!string.IsNullOrWhiteSpace(walFiles.MergedFile))
-        {
-            enqueueFiles.Add(walFiles.MergedFile);
-        }
-        
-        enqueueFiles.AddRange(walFiles.EnqueueFiles);
-
-        IEnumerable<EnqueueWalEvent> enqueueWalEvents = GetEvents(_enqueueWalReader, enqueueFiles);
+        IEnumerable<EnqueueWalEvent> enqueueWalEvents = GetEvents(_enqueueWalReader, walFiles.EnqueueFiles);
 
         LinkedList<RecoveredMessageDto> orderedMessages = [];
         Dictionary<Guid, LinkedListNode<RecoveredMessageDto>> nodeLookup = [];

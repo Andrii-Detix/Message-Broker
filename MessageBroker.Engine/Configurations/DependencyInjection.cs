@@ -137,7 +137,7 @@ public static class DependencyInjection
                     EnqueueKey => walOptions.FileNaming.EnqueuePrefix,
                     AckKey => walOptions.FileNaming.AckPrefix,
                     DeadKey => walOptions.FileNaming.DeadPrefix,
-                    MergedKey => walOptions.FileNaming.MergePrefix,
+                    MergedKey => walOptions.FileNaming.EnqueueMergedPrefix,
                     _ => throw new Exception("Unknown binding key.")
                 };
 

@@ -42,8 +42,7 @@ public class RecoveryServiceTests : IDisposable
             { 
                 EnqueueFiles = [], 
                 AckFiles = [], 
-                DeadFiles = [], 
-                MergedFile = string.Empty 
+                DeadFiles = []
             });
         
         _enqueueReaderMock.Setup(r => r.Read(It.IsAny<string>())).Returns([]);

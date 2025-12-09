@@ -29,7 +29,9 @@ public class ManifestManagerTests : IDisposable
                 EnqueuePrefix = "enqueue", 
                 AckPrefix = "ack", 
                 DeadPrefix = "dead",
-                MergePrefix = "enqueue-merged"
+                EnqueueMergedPrefix = "enqueue-merged",
+                AckMergedPrefix = "ack-merged",
+                DeadMergedPrefix = "dead-merged"
             }
         };
     }
@@ -48,7 +50,8 @@ public class ManifestManagerTests : IDisposable
         actual.Enqueue.ShouldBeEmpty();
         actual.Ack.ShouldBeEmpty();
         actual.Dead.ShouldBeEmpty();
-        actual.Merged.ShouldBeEmpty();
+        actual.EnqueueMerged.ShouldBeEmpty();
+        actual.AckMerged.ShouldBeEmpty();
     }
     
     [Fact]
@@ -67,7 +70,9 @@ public class ManifestManagerTests : IDisposable
         actual.Enqueue.ShouldBeEmpty();
         actual.Ack.ShouldBeEmpty();
         actual.Dead.ShouldBeEmpty();
-        actual.Merged.ShouldBeEmpty();
+        actual.EnqueueMerged.ShouldBeEmpty();
+        actual.EnqueueMerged.ShouldBeEmpty();
+        actual.AckMerged.ShouldBeEmpty();
     }
 
     [Fact]
@@ -82,7 +87,9 @@ public class ManifestManagerTests : IDisposable
             Enqueue = "enqueue-20251205180044-1.log",
             Ack = "ack-20251205180044-1.log",
             Dead = "dead-20251205180044-1.log",
-            Merged = "enqueue-merged--20251205180044-1.log"
+            EnqueueMerged = "enqueue-merged-20251205180044-1.log",
+            AckMerged = "ack-merged-20251205180044-1.log",
+            DeadMerged = "dead-merged-20251205180044-1.log"
         };
         
         string json = JsonSerializer.Serialize(manifest, new JsonSerializerOptions { WriteIndented = true });
@@ -106,7 +113,9 @@ public class ManifestManagerTests : IDisposable
             Enqueue = "enqueue-20251205180044-1.log",
             Ack = "ack-20251205180044-1.log",
             Dead = "dead-20251205180044-1.log",
-            Merged = "enqueue-merged--20251205180044-1.log"
+            EnqueueMerged = "enqueue-merged-20251205180044-1.log",
+            AckMerged = "ack-merged-20251205180044-1.log",
+            DeadMerged = "dead-merged-20251205180044-1.log"
         };
         
         // Act
@@ -130,7 +139,7 @@ public class ManifestManagerTests : IDisposable
             Enqueue = "some/directory/enqueue-20251205180044-1.log",
             Ack = "    ",
             Dead = null!,
-            Merged = "enqueue-merged--20251205180044-1.log"
+            EnqueueMerged = "enqueue-merged--20251205180044-1.log"
         };
         
         // Act
@@ -142,7 +151,7 @@ public class ManifestManagerTests : IDisposable
         actual.Enqueue.ShouldBe("enqueue-20251205180044-1.log");
         actual.Ack.ShouldBe(string.Empty);
         actual.Dead.ShouldBe(string.Empty);
-        actual.Merged.ShouldBe("enqueue-merged--20251205180044-1.log");
+        actual.EnqueueMerged.ShouldBe("enqueue-merged--20251205180044-1.log");
     }
 
     [Fact]
@@ -230,39 +239,36 @@ public class ManifestManagerTests : IDisposable
         enqueues[2].ShouldBe(file1);
         enqueues[3].ShouldBe(file4);
     }
-    
-    [Fact]
-    public void LoadWalFiles_ReturnsEmptyMergedFile_WhenItDoesNotExistOnDisk()
-    {
-        // Arrange
-        ManifestManager sut = new(Options.Create(_config));
-        string mergedName = "enqueue-merged-20251205180045-2.log";
-        
-        sut.Save(new WalManifest { Merged = mergedName });
-        
-        // Act
-        WalFiles actual = sut.LoadWalFiles();
-        
-        // Assert
-        actual.MergedFile.ShouldBeEmpty();
-    }
 
     [Fact]
-    public void LoadWalFiles_ReturnsMergedFile_WhenItExistsOnDisk()
+    public void LoadWalFiles_ReturnsWithMergedFile_WhenItExistsOnDisk()
     {
         // Arrange
         ManifestManager sut = new(Options.Create(_config));
-        string file = "enqueue-merged-20251205180045-2.log";
+        string mergedFile = "enqueue-merged-20251205180045-2.log";
+        string file1 = "enqueue-20251205180044-1.log";
+        string file2 = "enqueue-20251205180044-2.log";
+        string file3 = "enqueue-20251205180045-1.log";
         
-        File.Create(Path.Combine(_directory, file)).Dispose();
-        sut.Save(new WalManifest { Merged = file });
+        File.Create(Path.Combine(_directory, file1)).Dispose();
+        File.Create(Path.Combine(_directory, file2)).Dispose();
+        File.Create(Path.Combine(_directory, file3)).Dispose();
+        File.Create(Path.Combine(_directory, mergedFile)).Dispose();
+        
+        sut.Save(new WalManifest { EnqueueMerged = mergedFile });
         
         // Act
         WalFiles actual = sut.LoadWalFiles();
         
         // Assert
-        actual.MergedFile.ShouldNotBeEmpty();
-        Path.GetFileName(actual.MergedFile).ShouldBe(file);
+        actual.ShouldNotBeNull();
+        List<string?> enqueues = actual.EnqueueFiles.Select(Path.GetFileName).ToList();
+        enqueues.Count.ShouldBe(4);
+        
+        enqueues[0].ShouldBe(mergedFile);
+        enqueues[1].ShouldBe(file1);
+        enqueues[2].ShouldBe(file2);
+        enqueues[3].ShouldBe(file3);
     }
     
     [Fact]
@@ -272,12 +278,16 @@ public class ManifestManagerTests : IDisposable
         string enqueue = "enqueue-20251205180045-2.log";
         string ack = "ack-20250101-20251205180045-2.log";
         string dead = "dead-20250101-20251205180045-2.log";
-        string merged = "enqueue-merged-20251205180045-2.log";
+        string enqueueMerged = "enqueue-merged-20251205180045-2.log";
+        string ackMerged = "ack-merged-20251205180045-2.log";
+        string deadMerged = "dead-merged-20251205180045-2.log";
 
         File.Create(Path.Combine(_directory, enqueue)).Dispose();
         File.Create(Path.Combine(_directory, ack)).Dispose();
         File.Create(Path.Combine(_directory, dead)).Dispose();
-        File.Create(Path.Combine(_directory, merged)).Dispose();
+        File.Create(Path.Combine(_directory, enqueueMerged)).Dispose();
+        File.Create(Path.Combine(_directory, ackMerged)).Dispose();
+        File.Create(Path.Combine(_directory, deadMerged)).Dispose();
 
         ManifestManager sut = new(Options.Create(_config));
     
@@ -286,8 +296,11 @@ public class ManifestManagerTests : IDisposable
 
         // Assert
         actual.EnqueueFiles.ShouldContain(f => f.EndsWith(enqueue));
+        actual.EnqueueFiles.ShouldContain(f => f.EndsWith(enqueueMerged));
         actual.AckFiles.ShouldContain(f => f.EndsWith(ack));
+        actual.AckFiles.ShouldContain(f => f.EndsWith(ackMerged));
         actual.DeadFiles.ShouldContain(f => f.EndsWith(dead));
+        actual.DeadFiles.ShouldContain(f => f.EndsWith(deadMerged));
     }
     
     [Fact]
