@@ -2,6 +2,7 @@
 using MessageBroker.Core.Configurations;
 using MessageBroker.Core.Messages.Models;
 using MessageBroker.Persistence.Abstractions;
+using MessageBroker.Persistence.Configurations;
 using MessageBroker.Persistence.Events;
 using MessageBroker.Persistence.Manifests;
 namespace MessageBroker.Persistence.Recovery;
@@ -13,6 +14,7 @@ public class RecoveryService : IRecoveryService
     private readonly IWalReader<AckWalEvent> _ackWalReader;
     private readonly IWalReader<DeadWalEvent> _deadWalReader;
     private readonly IMessageQueueFactory _queueFactory;
+    private readonly WalOptions _walOptions;
     private readonly MessageOptions _messageOptions;
     private readonly TimeProvider _timeProvider;
 
@@ -22,6 +24,7 @@ public class RecoveryService : IRecoveryService
         IWalReader<AckWalEvent> ackWalReader,
         IWalReader<DeadWalEvent> deadWalReader,
         IMessageQueueFactory queueFactory,
+        WalOptions walOptions,
         MessageOptions messageOptions,
         TimeProvider timeProvider)
     {
@@ -30,6 +33,7 @@ public class RecoveryService : IRecoveryService
         ArgumentNullException.ThrowIfNull(ackWalReader);
         ArgumentNullException.ThrowIfNull(deadWalReader);
         ArgumentNullException.ThrowIfNull(queueFactory);
+        ArgumentNullException.ThrowIfNull(walOptions);
         ArgumentNullException.ThrowIfNull(messageOptions);
         ArgumentNullException.ThrowIfNull(timeProvider);
         
@@ -38,24 +42,36 @@ public class RecoveryService : IRecoveryService
         _ackWalReader = ackWalReader;
         _deadWalReader = deadWalReader;
         _queueFactory = queueFactory;
+        _walOptions = walOptions;
         _messageOptions = messageOptions;
         _timeProvider = timeProvider;
     }
     
     public IMessageQueue Recover()
     {
-        LinkedList<RecoveredMessageDto> dtos = RestoreRecoveryMessageDtos();
-
-        IMessageQueue queue = _queueFactory.Create();
-        
-        foreach (var dto in dtos)
+        if (_walOptions.ResetOnStartup)
         {
-            Message message = RestoreMessage(dto);
-            
-            queue.TryEnqueue(message);
+            ResetData();
+            return _queueFactory.Create();
         }
         
+        IMessageQueue queue = RecoverQueue();
+        
         return queue;
+    }
+
+    private void ResetData()
+    {
+        string directory = _walOptions.Directory;
+        
+        if (!Directory.Exists(directory))
+        {
+            return;
+        }
+        
+        Directory.Delete(directory, true);
+        
+        Directory.CreateDirectory(directory);
     }
 
     private IEnumerable<TEvent> GetEvents<TEvent>(IWalReader<TEvent> walReader, List<string> files)
@@ -127,5 +143,21 @@ public class RecoveryService : IRecoveryService
             null,
             dto.DeliveryAttempts,
             _messageOptions.MaxDeliveryAttempts);
-    } 
+    }
+
+    private IMessageQueue RecoverQueue()
+    {
+        IMessageQueue queue = _queueFactory.Create();
+        
+        LinkedList<RecoveredMessageDto> dtos = RestoreRecoveryMessageDtos();
+        
+        foreach (var dto in dtos)
+        {
+            Message message = RestoreMessage(dto);
+            
+            queue.TryEnqueue(message);
+        }
+        
+        return queue;
+    }
 }
