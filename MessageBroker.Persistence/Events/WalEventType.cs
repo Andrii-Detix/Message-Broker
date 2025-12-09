@@ -3,6 +3,7 @@
 public enum WalEventType
 {
     Enqueue,
+    Requeue,
     Ack,
     Dead
 }
