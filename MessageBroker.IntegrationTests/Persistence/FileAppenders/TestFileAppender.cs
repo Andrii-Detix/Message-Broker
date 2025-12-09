@@ -4,7 +4,10 @@ using MessageBroker.Persistence.FileAppenders;
 
 namespace MessageBroker.IntegrationTests.Persistence.FileAppenders;
 
-public record TestWalEvent() : WalEvent(WalEventType.Enqueue);
+public record TestWalEvent : WalEvent
+{
+    public override WalEventType Type => WalEventType.Enqueue;
+}
 
 public class TestFileAppender(
     ICrcProvider? crcProvider,
