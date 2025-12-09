@@ -2,6 +2,7 @@
 using MessageBroker.Core.Configurations;
 using MessageBroker.Core.Messages.Models;
 using MessageBroker.Persistence.Abstractions;
+using MessageBroker.Persistence.Configurations;
 using MessageBroker.Persistence.Events;
 using MessageBroker.Persistence.Manifests;
 using MessageBroker.Persistence.Recovery;
@@ -19,6 +20,7 @@ public class RecoveryServiceTests
     private readonly Mock<IWalReader<DeadWalEvent>> _deadReaderMock;
     private readonly Mock<IMessageQueueFactory> _queueFactoryMock;
     private readonly FakeTimeProvider _timeProvider;
+    private readonly WalOptions _walOptions;
     private readonly MessageOptions _messageOptions;
     
     public RecoveryServiceTests()
@@ -29,6 +31,11 @@ public class RecoveryServiceTests
         _deadReaderMock = new();
         _queueFactoryMock = new();
         _timeProvider = new();
+
+        _walOptions = new()
+        {
+            ResetOnStartup = false,
+        };
         
         _messageOptions = new()
         { 
@@ -365,6 +372,7 @@ public class RecoveryServiceTests
             _ackReaderMock.Object,
             _deadReaderMock.Object,
             _queueFactoryMock.Object,
+            _walOptions,
             _messageOptions,
             _timeProvider
         );
