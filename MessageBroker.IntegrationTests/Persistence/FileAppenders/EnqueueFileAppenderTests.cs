@@ -28,7 +28,7 @@ public class EnqueueFileAppenderTests : IDisposable
         EnqueueFileAppender sut = new(crcProvider, pathCreator, 2);
         EnqueueWalEvent evt = new(Guid.CreateVersion7(), [0x01, 0x02]);
 
-        int expectedLength = 8 + 22; // header (8) | record_length (4) | message_id (16) | payload (2)
+        int expectedLength = 8 + 22; // header (8) | event_type (4) | message_id (16) | payload (2)
         
         // Act
         sut.Append(evt);
@@ -41,8 +41,9 @@ public class EnqueueFileAppenderTests : IDisposable
         content.ShouldNotBeEmpty();
         content.Length.ShouldBe(expectedLength);
         
-        int actualSize = BinaryPrimitives.ReadInt32LittleEndian(content.AsSpan(8, 4));
-        actualSize.ShouldBe(expectedLength - 8);
+        WalEventType actualEventType = (WalEventType)BinaryPrimitives
+            .ReadInt32LittleEndian(content.AsSpan(8, 4));
+        actualEventType.ShouldBe(WalEventType.Enqueue);
         
         Guid actualMessageId = new Guid(content.AsSpan(12, 16));
         actualMessageId.ShouldBe(evt.MessageId);
@@ -61,7 +62,7 @@ public class EnqueueFileAppenderTests : IDisposable
         EnqueueFileAppender sut = new(crcProvider, pathCreator, 2);
         EnqueueWalEvent evt = new(Guid.CreateVersion7(), []);
         
-        int expectedLength = 8 + 20; // header (8) | record_length (4) | message_id (16) | payload (0)
+        int expectedLength = 8 + 20; // header (8) | event_type (4) | message_id (16) | payload (0)
         
         // Act
         sut.Append(evt);
@@ -73,12 +74,31 @@ public class EnqueueFileAppenderTests : IDisposable
         byte[] content = File.ReadAllBytes(actualFile);
         content.ShouldNotBeEmpty();
         content.Length.ShouldBe(expectedLength);
+    }
+
+    [Fact]
+    public void Append_WritesRequeueWalEventType_WhenRequeueEventIsProvided()
+    {
+        // Arrange
+        FakeTimeProvider timeProvider = new();
+        ICrcProvider crcProvider = new CrcProvider();
+        IFilePathCreator pathCreator = new FilePathCreator(_directory, "enqueue", "ext", timeProvider);
+        EnqueueFileAppender sut = new(crcProvider, pathCreator, 2);
+        RequeueWalEvent evt = new(Guid.CreateVersion7());
+
+        // Act
+        sut.Append(evt);
         
-        int actualSize = BinaryPrimitives.ReadInt32LittleEndian(content.AsSpan(8, 4));
-        actualSize.ShouldBe(expectedLength - 8);
+        // Assert
+        string actualFile = sut.CurrentFile;
+        sut.Dispose();
         
-        Guid actualMessageId = new Guid(content.AsSpan(12, 16));
-        actualMessageId.ShouldBe(evt.MessageId);
+        byte[] content = File.ReadAllBytes(actualFile);
+        content.ShouldNotBeEmpty();
+        
+        WalEventType actualEventType = (WalEventType)BinaryPrimitives
+            .ReadInt32LittleEndian(content.AsSpan(8, 4));
+        actualEventType.ShouldBe(WalEventType.Requeue);
     }
     
     public void Dispose()
