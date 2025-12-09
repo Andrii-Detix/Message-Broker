@@ -13,9 +13,11 @@ public class GlobalExceptionHandler(ILogger<GlobalExceptionHandler> logger)
         Exception exception, 
         CancellationToken cancellationToken)
     {
-        logger.LogError(exception, "Exception occurred: {Message}", exception.Message);
-        
         int statusCode = GetStatusCode(exception);
+
+        LogLevel logLevel = statusCode >= 500 ? LogLevel.Error : LogLevel.Warning;
+        
+        logger.Log(logLevel, exception, "Exception occurred: {Message}", exception.Message);
         
         string detail = statusCode == StatusCodes.Status500InternalServerError
             ? "An internal server error occurred."
