@@ -17,7 +17,7 @@ public class EnqueueWalReaderTests : IDisposable
     }
     
     [Fact]
-    public void Read_ReturnsEventWithPayload_WhenFileFormatIsCorrect()
+    public void Read_ReturnsEnqueueEventWithPayload_WhenFileFormatIsCorrect()
     {
         // Arrange
         string filePath = Path.Combine(_directory, "valid.log");
@@ -27,12 +27,12 @@ public class EnqueueWalReaderTests : IDisposable
 
         using (var writer = new BinaryWriter(File.OpenWrite(filePath)))
         {
-            // Length: 4 (size) + 16 (id) + 3 (payload) = 23
-            byte[] lengthBuffer = BitConverter.GetBytes(23);
+            // Event_type
+            byte[] eventTypeBuffer = BitConverter.GetBytes((int)WalEventType.Enqueue);
             // Id
             byte[] idBuffer = messageId.ToByteArray();
             // Concat
-            byte[] data = lengthBuffer.Concat(idBuffer).Concat(payload).ToArray();
+            byte[] data = eventTypeBuffer.Concat(idBuffer).Concat(payload).ToArray();
             // Header
             byte[] header = new byte[8];
             crcProvider.WriteHeader(header, data);
@@ -50,6 +50,7 @@ public class EnqueueWalReaderTests : IDisposable
         actual.Length.ShouldBe(1);
         EnqueueWalEvent evt = actual.First();
         
+        evt.ShouldBeOfType<EnqueueWalEvent>();
         evt.MessageId.ShouldBe(messageId);
         evt.Payload.ShouldBe(payload);
     }
@@ -65,12 +66,12 @@ public class EnqueueWalReaderTests : IDisposable
 
         using (var writer = new BinaryWriter(File.OpenWrite(filePath)))
         {
-            // Length: 4 (size) + 16 (id) + 0 (payload) = 20
-            byte[] lengthBuffer = BitConverter.GetBytes(20);
+            // Event_type
+            byte[] eventTypeBuffer = BitConverter.GetBytes((int)WalEventType.Enqueue);
             // Id
             byte[] idBuffer = messageId.ToByteArray();
             // Concat
-            byte[] data = lengthBuffer.Concat(idBuffer).Concat(payload).ToArray();
+            byte[] data = eventTypeBuffer.Concat(idBuffer).Concat(payload).ToArray();
             // Header
             byte[] header = new byte[8];
             crcProvider.WriteHeader(header, data);
@@ -100,12 +101,12 @@ public class EnqueueWalReaderTests : IDisposable
 
         using (var writer = new BinaryWriter(File.OpenWrite(filePath)))
         {
-            // Length: 4 (size) + 16 (id) + 3 (payload) = 23
-            byte[] lengthBuffer = BitConverter.GetBytes(23);
+            // Event_type
+            byte[] eventTypeBuffer = BitConverter.GetBytes((int)WalEventType.Enqueue);
             // Id
             byte[] idBuffer = messageId.ToByteArray();
             // Concat
-            byte[] data = lengthBuffer.Concat(idBuffer).Concat(payload).ToArray();
+            byte[] data = eventTypeBuffer.Concat(idBuffer).Concat(payload).ToArray();
             // Header
             byte[] header = new byte[8];
             crcProvider.WriteHeader(header, data);
@@ -125,6 +126,44 @@ public class EnqueueWalReaderTests : IDisposable
     }
 
     [Fact]
+    public void Read_CanHandleRequeueEvent_WhenWalEventTypeIsRequeue()
+    {
+        // Arrange
+        string filePath = Path.Combine(_directory, "valid.log");
+        ICrcProvider crcProvider = new CrcProvider();
+        Guid messageId = Guid.CreateVersion7();
+
+        using (var writer = new BinaryWriter(File.OpenWrite(filePath)))
+        {
+            // Event_type
+            byte[] eventTypeBuffer = BitConverter.GetBytes((int)WalEventType.Requeue);
+            // Id
+            byte[] idBuffer = messageId.ToByteArray();
+            // Concat
+            byte[] data = eventTypeBuffer.Concat(idBuffer).ToArray();
+            // Header
+            byte[] header = new byte[8];
+            crcProvider.WriteHeader(header, data);
+
+            writer.Write(header);
+            writer.Write(data);
+        }
+        
+        EnqueueWalReader sut = new(crcProvider);
+
+        // Act
+        EnqueueWalEvent[] actual = sut.Read(filePath).ToArray();
+        
+        // Assert
+        actual.Length.ShouldBe(1);
+        EnqueueWalEvent evt = actual.First();
+        
+        evt.ShouldBeOfType<RequeueWalEvent>();
+        evt.MessageId.ShouldBe(messageId);
+        evt.Payload.ShouldBe([]);
+    }
+
+    [Fact]
     public void Read_CanReadMultipleEvents_FromSingleFile()
     {
         // Arrange
@@ -137,9 +176,11 @@ public class EnqueueWalReaderTests : IDisposable
         Guid messageId2 = Guid.CreateVersion7();
         byte[] payload2 = [0xAA, 0xBB];
         
+        Guid messageId3 = Guid.CreateVersion7();
+        
         using (var writer = new BinaryWriter(File.OpenWrite(filePath)))
         {
-            byte[] lengthBuffer1 = BitConverter.GetBytes(23);
+            byte[] lengthBuffer1 = BitConverter.GetBytes((int)WalEventType.Enqueue);
             byte[] idBuffer1 = messageId1.ToByteArray();
             byte[] data1 = lengthBuffer1.Concat(idBuffer1).Concat(payload1).ToArray();
             byte[] header1 = new byte[8];
@@ -147,13 +188,21 @@ public class EnqueueWalReaderTests : IDisposable
             writer.Write(header1);
             writer.Write(data1);
             
-            byte[] lengthBuffer2 = BitConverter.GetBytes(22);
+            byte[] lengthBuffer2 = BitConverter.GetBytes((int)WalEventType.Enqueue);
             byte[] idBuffer2 = messageId2.ToByteArray();
             byte[] data2 = lengthBuffer2.Concat(idBuffer2).Concat(payload2).ToArray();
             byte[] header2 = new byte[8];
             crcProvider.WriteHeader(header2, data2);
             writer.Write(header2);
             writer.Write(data2);
+            
+            byte[] lengthBuffer3 = BitConverter.GetBytes((int)WalEventType.Requeue);
+            byte[] idBuffer3 = messageId3.ToByteArray();
+            byte[] data3 = lengthBuffer3.Concat(idBuffer3).ToArray();
+            byte[] header3 = new byte[8];
+            crcProvider.WriteHeader(header3, data3);
+            writer.Write(header3);
+            writer.Write(data3);
         }
         
         EnqueueWalReader sut = new(crcProvider);
@@ -162,13 +211,19 @@ public class EnqueueWalReaderTests : IDisposable
         EnqueueWalEvent[] actual = sut.Read(filePath).ToArray();
         
         // Assert
-        actual.Length.ShouldBe(2);
+        actual.Length.ShouldBe(3);
         
+        actual[0].ShouldBeOfType<EnqueueWalEvent>();
         actual[0].MessageId.ShouldBe(messageId1);
         actual[0].Payload.ShouldBe(payload1);
         
+        actual[1].ShouldBeOfType<EnqueueWalEvent>();
         actual[1].MessageId.ShouldBe(messageId2);
         actual[1].Payload.ShouldBe(payload2);
+        
+        actual[2].ShouldBeOfType<RequeueWalEvent>();
+        actual[2].MessageId.ShouldBe(messageId3);
+        actual[2].Payload.ShouldBe([]);
     }
     
     public void Dispose()

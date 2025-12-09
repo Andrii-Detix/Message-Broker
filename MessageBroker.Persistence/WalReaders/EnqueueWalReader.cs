@@ -1,5 +1,6 @@
 ﻿using System.Buffers.Binary;
 using MessageBroker.Persistence.Abstractions;
+using MessageBroker.Persistence.Common.Exceptions;
 using MessageBroker.Persistence.Events;
 
 namespace MessageBroker.Persistence.WalReaders;
@@ -14,16 +15,22 @@ public class EnqueueWalReader(ICrcProvider crcProvider)
 
         int offset = 0;
 
-        int length = BinaryPrimitives.ReadInt32LittleEndian(data.Slice(offset, intSize));
+        WalEventType eventType = (WalEventType)BinaryPrimitives
+            .ReadInt32LittleEndian(data.Slice(offset, intSize));
         offset += intSize;
         
         Guid messageId = new Guid(data.Slice(offset, guidSize));
         offset += guidSize;
 
-        int payloadLength = length - intSize - guidSize;
+        int payloadLength = data.Length - intSize - guidSize;
         byte[] payload = data.Slice(offset, payloadLength).ToArray();
 
-        EnqueueWalEvent evt = new(messageId, payload);
+        EnqueueWalEvent evt = eventType switch
+        {
+            WalEventType.Enqueue => new EnqueueWalEvent(messageId, payload),
+            WalEventType.Requeue => new RequeueWalEvent(messageId),
+            _ => throw new UnknownWalEventTypeException()
+        };
         
         return evt;
     }
