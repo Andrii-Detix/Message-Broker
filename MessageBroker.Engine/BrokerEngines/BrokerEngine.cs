@@ -8,12 +8,13 @@ using MessageBroker.Persistence.Abstractions;
 using MessageBroker.Persistence.Events;
 namespace MessageBroker.Engine.BrokerEngines;
 
-public class BrokerEngine : IBrokerEngine
+public class BrokerEngine : IBrokerEngine, IRequeueService
 {
-    private readonly Lock _publishLocker = new();
+    private readonly Lock _enqueueLocker = new();
     
     private readonly IMessageQueue _messageQueue;
     private readonly IWriteAheadLog _wal;
+    private readonly IExpiredMessagePolicy _expiredMessagePolicy;
     private readonly TimeProvider _timeProvider;
     private readonly int _maxPayloadLength;
     private readonly int _maxDeliveryAttempts;
@@ -21,12 +22,14 @@ public class BrokerEngine : IBrokerEngine
     public BrokerEngine(
         IMessageQueue? messageQueue,
         IWriteAheadLog? wal,
+        IExpiredMessagePolicy? expiredMessagePolicy,
         TimeProvider? timeProvider,
         int maxPayloadLength,
         int maxDeliveryAttempts)
     {
         ArgumentNullException.ThrowIfNull(messageQueue);
         ArgumentNullException.ThrowIfNull(wal);
+        ArgumentNullException.ThrowIfNull(expiredMessagePolicy);
         ArgumentNullException.ThrowIfNull(timeProvider);
 
         if (maxPayloadLength < 0)
@@ -41,6 +44,7 @@ public class BrokerEngine : IBrokerEngine
         
         _messageQueue = messageQueue;
         _wal = wal;
+        _expiredMessagePolicy = expiredMessagePolicy;
         _timeProvider = timeProvider;
         _maxPayloadLength = maxPayloadLength;
         _maxDeliveryAttempts = maxDeliveryAttempts;
@@ -64,16 +68,9 @@ public class BrokerEngine : IBrokerEngine
 
         EnqueueWalEvent enqueueEvent = new(message.Id, message.Payload);
 
-        bool enqueueSuccess;
+        bool success = TryEnqueueMessage(message, enqueueEvent);
         
-        lock (_publishLocker)
-        {
-            _wal.Append(enqueueEvent);
-            
-            enqueueSuccess = _messageQueue.TryEnqueue(message);
-        }
-        
-        if (!enqueueSuccess)
+        if (!success)
         {
             DeadWalEvent deadEvent = new(message.Id);
             
@@ -105,5 +102,38 @@ public class BrokerEngine : IBrokerEngine
         {
             throw new SentMessageNotFoundException(messageId);
         }
+    }
+    
+    public void Requeue()
+    {
+        IEnumerable<Message> messages = _messageQueue.TakeExpiredMessages(_expiredMessagePolicy);
+
+        foreach (Message message in messages)
+        {
+            RequeueWalEvent requeueEvent = new(message.Id);
+            
+            bool success = TryEnqueueMessage(message, requeueEvent);
+
+            if (!success)
+            {
+                DeadWalEvent deadEvent = new(message.Id);
+            
+                _wal.Append(deadEvent);
+            }
+        }
+    }
+
+    private bool TryEnqueueMessage(Message message, EnqueueWalEvent enqueueEvent)
+    {
+        bool enqueueSuccess;
+        
+        lock (_enqueueLocker)
+        {
+            _wal.Append(enqueueEvent);
+                
+            enqueueSuccess = _messageQueue.TryEnqueue(message);
+        }
+
+        return enqueueSuccess;
     }
 }

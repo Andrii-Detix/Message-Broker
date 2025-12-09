@@ -1,6 +1,7 @@
 ﻿using MessageBroker.Core.Abstractions;
 using MessageBroker.Engine.Abstractions;
 using MessageBroker.Engine.Configurations;
+using MessageBroker.Engine.RequeueServices;
 using MessageBroker.Persistence.Configurations;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
@@ -35,6 +36,24 @@ public class DependencyInjectionTests : IDisposable
 
         // Assert
         engine.ShouldNotBeNull();
+    }
+
+    [Fact]
+    public void AddMessageBroker_CreatesRequeueBackgroundService_WhenConfigurationIsValid()
+    {
+        // Arrange
+        IConfiguration configuration = CreateConfiguration();
+        IServiceCollection services = CreateServiceCollection(configuration);
+        services.AddMessageBroker();
+        
+        using ServiceProvider provider = services.BuildServiceProvider();
+
+        // Act
+        var actual = provider.GetServices<IHostedService>();
+        
+        // Assert
+        var requeueService = actual.OfType<RequeueBackgroundService>().FirstOrDefault();
+        requeueService.ShouldNotBeNull();
     }
 
     [Fact]

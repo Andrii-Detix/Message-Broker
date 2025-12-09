@@ -67,6 +67,14 @@ public static class DependencyInjection
             
             services.AddWriteAheadLog();
             
+            services.AddSingleton<IExpiredMessagePolicy>(sp =>
+            {
+                TimeProvider timeProvider = sp.GetRequiredService<TimeProvider>();
+                BrokerOptions options = sp.GetRequiredService<IOptions<BrokerOptions>>().Value;
+
+                return new ExpiredMessagePolicy(options.ExpiredPolicy.ExpirationTime, timeProvider);
+            });
+            
             services.AddBrokerEngine();
             
             services.AddRequeueService();
@@ -178,6 +186,7 @@ public static class DependencyInjection
                 TimeProvider timeProvider = sp.GetRequiredService<TimeProvider>();
                 IMessageQueue messageQueue = sp.GetRequiredService<IMessageQueue>();
                 IWriteAheadLog wal = sp.GetRequiredService<IWriteAheadLog>();
+                IExpiredMessagePolicy expiredPolicy = sp.GetRequiredService<IExpiredMessagePolicy>();
                 BrokerOptions options = sp.GetRequiredService<IOptions<BrokerOptions>>().Value;
 
                 int maxPayloadSize = options.Message.MaxPayloadSize;
@@ -186,6 +195,7 @@ public static class DependencyInjection
                 return new BrokerEngine(
                     messageQueue,
                     wal,
+                    expiredPolicy,
                     timeProvider,
                     maxPayloadSize,
                     maxDeliveryAttempts);
@@ -204,15 +214,8 @@ public static class DependencyInjection
 
         private void AddRequeueService()
         {
-            services.AddSingleton<IExpiredMessagePolicy>(sp =>
-            {
-                TimeProvider timeProvider = sp.GetRequiredService<TimeProvider>();
-                BrokerOptions options = sp.GetRequiredService<IOptions<BrokerOptions>>().Value;
-
-                return new ExpiredMessagePolicy(options.ExpiredPolicy.ExpirationTime, timeProvider);
-            });
-            
-            services.AddSingleton<IRequeueService, RequeueService>();
+            services.AddSingleton<IRequeueService>(sp =>
+                sp.GetRequiredService<BrokerEngine>());
             
             services.AddHostedService<RequeueBackgroundService>(sp =>
             {
