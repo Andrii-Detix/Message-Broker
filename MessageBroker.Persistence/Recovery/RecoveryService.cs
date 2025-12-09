@@ -73,59 +73,89 @@ public class RecoveryService : IRecoveryService
         
         Directory.CreateDirectory(directory);
     }
+    
+    private IMessageQueue RecoverQueue()
+    {
+        IMessageQueue queue = _queueFactory.Create();
+        
+        LinkedList<RecoveredMessageDto> pendingMessages = ReconstructRecoveryMessages();
+        
+        foreach (var pendingMessageDto in pendingMessages)
+        {
+            Message message = MapToDomainMessage(pendingMessageDto);
+            
+            queue.TryEnqueue(message);
+        }
+        
+        return queue;
+    }
 
-    private IEnumerable<TEvent> GetEvents<TEvent>(IWalReader<TEvent> walReader, List<string> files)
+    private LinkedList<RecoveredMessageDto> ReconstructRecoveryMessages()
+    {
+        WalFiles files = _manifestManager.LoadWalFiles();
+        
+        HashSet<Guid> ignoredIds = LoadIgnoredMessageIds(files);
+
+        IEnumerable<EnqueueWalEvent> enqueueWalEvents = ReadEvents(_enqueueWalReader, files.EnqueueFiles);
+
+        LinkedList<RecoveredMessageDto> orderedMessages = [];
+        Dictionary<Guid, LinkedListNode<RecoveredMessageDto>> messageNodes = [];
+        
+        foreach (var enqueueWalEvent in enqueueWalEvents)
+        {
+            Guid messageId = enqueueWalEvent.MessageId;
+            
+            if (enqueueWalEvent is RequeueWalEvent)
+            {
+                if (messageNodes.TryGetValue(messageId, out var existingNode))
+                {
+                    MoveToBack(orderedMessages, existingNode);
+                }
+                
+                continue;
+            }
+            
+            if (ignoredIds.Contains(messageId))
+            {
+                continue;
+            }
+
+            RecoveredMessageDto dto = new(enqueueWalEvent.MessageId, enqueueWalEvent.Payload);
+            LinkedListNode<RecoveredMessageDto> newNode = orderedMessages.AddLast(dto);
+            
+            messageNodes.TryAdd(messageId, newNode);
+        }
+
+        return orderedMessages;
+    }
+    
+    private HashSet<Guid> LoadIgnoredMessageIds(WalFiles files)
+    {
+        IEnumerable<Guid> ackIds = ReadEvents(_ackWalReader, files.AckFiles)
+            .Select(e => e.MessageId);
+        
+        IEnumerable<Guid> deadIds = ReadEvents(_deadWalReader, files.DeadFiles)
+            .Select(e => e.MessageId);
+
+        return ackIds.Concat(deadIds).ToHashSet();
+    }
+    
+    private IEnumerable<TEvent> ReadEvents<TEvent>(IWalReader<TEvent> walReader, List<string> files)
         where TEvent : WalEvent
     {
         return files.SelectMany(walReader.Read);
     }
 
-    private LinkedList<RecoveredMessageDto> RestoreRecoveryMessageDtos()
+    private static void MoveToBack(
+        LinkedList<RecoveredMessageDto> list,
+        LinkedListNode<RecoveredMessageDto> node)
     {
-        WalFiles walFiles = _manifestManager.LoadWalFiles();
-        
-        IEnumerable<Guid> ackIds = GetEvents(_ackWalReader, walFiles.AckFiles)
-            .Select(e => e.MessageId);
-        
-        IEnumerable<Guid> deadIds = GetEvents(_deadWalReader, walFiles.DeadFiles)
-            .Select(e => e.MessageId);
-        
-        HashSet<Guid> completedIds = ackIds.Concat(deadIds).ToHashSet();
-
-        IEnumerable<EnqueueWalEvent> enqueueWalEvents = GetEvents(_enqueueWalReader, walFiles.EnqueueFiles);
-
-        LinkedList<RecoveredMessageDto> orderedMessages = [];
-        Dictionary<Guid, LinkedListNode<RecoveredMessageDto>> nodeLookup = [];
-        
-        foreach (var enqueueWalEvent in enqueueWalEvents)
-        {
-            Guid messageId = enqueueWalEvent.MessageId;
-
-            if (completedIds.Contains(messageId))
-            {
-                continue;
-            }
-
-            if (nodeLookup.TryGetValue(messageId, out LinkedListNode<RecoveredMessageDto>? node))
-            {
-                node.Value.DeliveryAttempts++;
-                
-                orderedMessages.Remove(node);
-                orderedMessages.AddLast(node);
-                
-                continue;
-            }
-
-            RecoveredMessageDto dto = new(enqueueWalEvent.MessageId, enqueueWalEvent.Payload);
-            
-            node = orderedMessages.AddLast(dto);
-            nodeLookup.TryAdd(messageId, node);
-        }
-
-        return orderedMessages;
+        node.Value.DeliveryAttempts++;
+        list.Remove(node);
+        list.AddLast(node);
     }
 
-    private Message RestoreMessage(RecoveredMessageDto dto)
+    private Message MapToDomainMessage(RecoveredMessageDto dto)
     {
         return Message.Restore(
             dto.MessageId,
@@ -135,21 +165,5 @@ public class RecoveryService : IRecoveryService
             null,
             dto.DeliveryAttempts,
             _messageOptions.MaxDeliveryAttempts);
-    }
-
-    private IMessageQueue RecoverQueue()
-    {
-        IMessageQueue queue = _queueFactory.Create();
-        
-        LinkedList<RecoveredMessageDto> dtos = RestoreRecoveryMessageDtos();
-        
-        foreach (var dto in dtos)
-        {
-            Message message = RestoreMessage(dto);
-            
-            queue.TryEnqueue(message);
-        }
-        
-        return queue;
     }
 }
