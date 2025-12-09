@@ -236,67 +236,12 @@ public class RecoveryServiceTests
         actual.TryConsume(out Message? consumed3);
         consumed3!.Id.ShouldBe(messageId3);
     }
-    
-    [Fact]
-    public void Restore_RestoresMessage_WhenItStoredInMergedFile()
-    {
-        // Arrange
-        Guid messageId = Guid.CreateVersion7();
-        byte[] payload = [0x01, 0x02, 0x03];
-        
-        SetupWalFiles(mergedFile: "mrg-1");
-        SetupEnqueueEvents("mrg-1", new EnqueueWalEvent(messageId, payload));
-
-        RecoveryService sut = CreateRecoveryService();
-        
-        // Act
-        IMessageQueue actual = sut.Recover();
-
-        // Assert
-        actual.Count.ShouldBe(1);
-        actual.TryConsume(out Message? message);
-        
-        message!.Id.ShouldBe(messageId);
-        message.Payload.ShouldBe(payload);
-        message.DeliveryCount.ShouldBe(0);
-        message.State.ShouldBe(MessageState.Restored);
-    }
 
     [Fact]
-    public void Restore_RestoresMessagesFromMergedFileBeforeEnqueueFile()
+    public void Recover_ReturnsNoMessages_WhenNoEnqueueFiles()
     {
         // Arrange
-        Guid messageId1 = Guid.CreateVersion7();
-        Guid messageId2 = Guid.CreateVersion7();
-        
-        SetupWalFiles(
-            enqueueFiles: ["enq-1"],
-            mergedFile: "mrg-1");
-        SetupEnqueueEvents("mrg-1", new EnqueueWalEvent(messageId1, []));
-        SetupEnqueueEvents("enq-1", new EnqueueWalEvent(messageId2, []));
-        
-        RecoveryService sut = CreateRecoveryService();
-        
-        // Act
-        IMessageQueue actual = sut.Recover();
-        
-        // Assert
-        actual.Count.ShouldBe(2);
-        
-        actual.TryConsume(out Message? consumed1);
-        consumed1!.Id.ShouldBe(messageId1);
-        
-        actual.TryConsume(out Message? consumed2);
-        consumed2!.Id.ShouldBe(messageId2);
-    }
-
-    [Fact]
-    public void Recover_ReturnsNoMessages_WhenNoEnqueueOrMergedFiles()
-    {
-        // Arrange
-        SetupWalFiles(
-            enqueueFiles: [],
-            mergedFile: string.Empty);
+        SetupWalFiles(enqueueFiles: []);
         
         RecoveryService sut = CreateRecoveryService();
         
@@ -318,25 +263,23 @@ public class RecoveryServiceTests
         Guid messageId5 = Guid.CreateVersion7();
         
         SetupWalFiles(
-            enqueueFiles: ["enq-1", "enq-2", "enq-4"],
+            enqueueFiles: ["enq-1","enq-2", "enq-3", "enq-5"],
             ackFiles: ["ack-2", "ack-3"],
-            deadFiles: ["dead-1", "dead-2"],
-            mergedFile: "mrg-1");
+            deadFiles: ["dead-1", "dead-2"]);
         
         SetupEnqueueEvents(
-            "mrg-1", 
+            "enq-1", 
             new EnqueueWalEvent(messageId1, []),
             new EnqueueWalEvent(messageId2, []));
-        
-        SetupEnqueueEvents("enq-1");
+        SetupEnqueueEvents("enq-2");
         SetupEnqueueEvents(
-            "enq-2", 
+            "enq-3", 
             new EnqueueWalEvent(messageId3, []),
             new RequeueWalEvent(messageId1),
             new EnqueueWalEvent(messageId4, []),
             new RequeueWalEvent(messageId1));
         SetupEnqueueEvents(
-            "enq-4",
+            "enq-5",
             new RequeueWalEvent(messageId3),
             new EnqueueWalEvent(messageId5, []));
         
@@ -381,15 +324,13 @@ public class RecoveryServiceTests
     private void SetupWalFiles(
         string[]? enqueueFiles = null, 
         string[]? ackFiles = null, 
-        string[]? deadFiles = null,
-        string? mergedFile = "")
+        string[]? deadFiles = null)
     {
         WalFiles files = new()
         {
             EnqueueFiles = (enqueueFiles ?? []).ToList(),
             AckFiles = (ackFiles ?? []).ToList(),
-            DeadFiles = (deadFiles ?? []).ToList(),
-            MergedFile = mergedFile ?? string.Empty
+            DeadFiles = (deadFiles ?? []).ToList()
         };
         
         _manifestMock.Setup(m => m.LoadWalFiles()).Returns(files);

@@ -4,7 +4,10 @@ using MessageBroker.Persistence.WalReaders;
 
 namespace MessageBroker.IntegrationTests.Persistence.WalReaders;
 
-public record FaultyTestWalEvent() : WalEvent(WalEventType.Enqueue);
+public record FaultyTestWalEvent : WalEvent
+{
+    public override WalEventType Type => WalEventType.Enqueue;
+}
 
 public class CustomException() : Exception("Custom Exception.");
 

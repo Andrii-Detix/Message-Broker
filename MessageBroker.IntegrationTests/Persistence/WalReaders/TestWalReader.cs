@@ -5,7 +5,10 @@ using MessageBroker.Persistence.WalReaders;
 
 namespace MessageBroker.IntegrationTests.Persistence.WalReaders;
 
-public record TestWalEvent(int Value) : WalEvent(WalEventType.Enqueue);
+public record TestWalEvent(int Value) : WalEvent
+{
+    public override WalEventType Type => WalEventType.Enqueue;
+}
 
 public class TestWalReader(ICrcProvider crcProvider) 
     : AbstractWalReader<TestWalEvent>(crcProvider)

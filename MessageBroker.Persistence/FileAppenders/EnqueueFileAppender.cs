@@ -14,14 +14,14 @@ public class EnqueueFileAppender(
     {
         int payloadLength = evt.Payload.Length;
         
-        // Format: record_length (4) | message_id (16) | payload (n-bytes)
+        // Format: event_type (4) | message_id (16) | payload (n-bytes)
         int length = 4 + 16 + payloadLength;
 
         byte[] bufferArray = new byte[length];
         Span<byte> buffer = bufferArray;
         
         // record_length (4)
-        BinaryPrimitives.WriteInt32LittleEndian(buffer.Slice(0, 4), length);
+        BinaryPrimitives.WriteInt32LittleEndian(buffer.Slice(0, 4), (int)evt.Type);
         
         // message_id (16)
         evt.MessageId.TryWriteBytes(buffer.Slice(4, 16));

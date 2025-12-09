@@ -8,5 +8,9 @@ public record WalManifest
     
     public string Dead { get; init; } = string.Empty;
     
-    public string Merged { get; init; } = string.Empty;
+    public string EnqueueMerged { get; init; } = string.Empty;
+    
+    public string AckMerged { get; init; } = string.Empty;
+    
+    public string DeadMerged { get; init; } = string.Empty;
 }
