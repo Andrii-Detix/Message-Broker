@@ -151,6 +151,33 @@ public class RecoveryServiceTests
     }
 
     [Fact]
+    public void Recover_IgnoresRequeueEvents_WhenOriginalEnqueueEventDoesNotExist()
+    {
+        // Arrange
+        Guid messageId = Guid.CreateVersion7();
+
+        EnqueueWalEvent[] enqueueEvents = 
+        [
+            new RequeueWalEvent(messageId),
+            new RequeueWalEvent(messageId)
+        ]; 
+        
+        SetupWalFiles(enqueueFiles: ["enq-1"]);
+        SetupEnqueueEvents("enq-1", enqueueEvents);
+        
+        RecoveryService sut = CreateRecoveryService();
+        
+        // Act
+        IMessageQueue actual = sut.Recover();
+        
+        // Assert
+        actual.Count.ShouldBe(0);
+        
+        actual.TryConsume(out Message? message);
+        message.ShouldBeNull();
+    }
+    
+    [Fact]
     public void Recover_IgnoresMessage_WhenItIsAcked()
     {
         // Arrange
