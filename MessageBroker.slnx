@@ -12,6 +12,7 @@
     <Project Path="MessageBroker.Persistence/MessageBroker.Persistence.csproj" />
   </Folder>
   <Folder Name="/tests/">
+    <Project Path="MessageBroker.EndToEndTests/MessageBroker.EndToEndTests.csproj" />
     <Project Path="MessageBroker.IntegrationTests/MessageBroker.IntegrationTests.csproj" />
     <Project Path="MessageBroker.UnitTests/MessageBroker.UnitTests.csproj" />
   </Folder>
