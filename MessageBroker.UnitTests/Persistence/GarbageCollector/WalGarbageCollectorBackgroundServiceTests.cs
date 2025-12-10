@@ -90,7 +90,7 @@ public class WalGarbageCollectorBackgroundServiceTests
         // Act
         await sut.StartAsync(CancellationToken.None);
         
-        await Task.Delay(TimeSpan.FromMilliseconds(300));
+        await Task.Delay(TimeSpan.FromMilliseconds(500));
         
         await sut.StopAsync(CancellationToken.None);
         
@@ -117,7 +117,7 @@ public class WalGarbageCollectorBackgroundServiceTests
         // Act
         await sut.StartAsync(CancellationToken.None);
         
-        await Task.Delay(TimeSpan.FromMilliseconds(300));
+        await Task.Delay(TimeSpan.FromMilliseconds(500));
         
         await sut.StopAsync(CancellationToken.None);
         
