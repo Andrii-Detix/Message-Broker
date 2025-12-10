@@ -7,5 +7,6 @@ public record WalOptions
     public int MaxWriteCountPerFile { get; set; } = 1000;
 
     public FileNamingOptions FileNaming { get; init; } = new();
+    public GarbageCollectorOptions GarbageCollector { get; init; } = new();
     public ManifestOptions Manifest { get; init; } = new();
 }
