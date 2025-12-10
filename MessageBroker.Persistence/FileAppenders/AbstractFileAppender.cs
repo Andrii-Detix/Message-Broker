@@ -6,7 +6,7 @@ using MessageBroker.Persistence.FileAppenders.Exceptions;
 namespace MessageBroker.Persistence.FileAppenders;
 
 public abstract class AbstractFileAppender<TEvent> 
-    : IFileAppender<TEvent>, IDisposable
+    : IFileAppender<TEvent>
     where TEvent : WalEvent
 {
     private readonly Lock _streamLocker = new();

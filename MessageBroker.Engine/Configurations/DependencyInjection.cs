@@ -13,6 +13,7 @@ using MessageBroker.Persistence.CrcProviders;
 using MessageBroker.Persistence.Events;
 using MessageBroker.Persistence.FileAppenders;
 using MessageBroker.Persistence.FilePathCreators;
+using MessageBroker.Persistence.GarbageCollectors;
 using MessageBroker.Persistence.Manifests;
 using MessageBroker.Persistence.Recovery;
 using MessageBroker.Persistence.WalReaders;
@@ -29,7 +30,9 @@ public static class DependencyInjection
     private const string EnqueueKey = "Enqueue";
     private const string AckKey = "Ack";
     private const string DeadKey = "Dead";
-    private const string MergedKey = "Merged";
+    private const string EnqueueMergedKey = "Enqueue-Merged";
+    private const string AckMergedKey = "Ack-Merged";
+    private const string DeadMergedKey = "Dead-Merged";
     
     extension(IServiceCollection services)
     {
@@ -61,7 +64,9 @@ public static class DependencyInjection
             services.AddFilePathCreator(EnqueueKey);
             services.AddFilePathCreator(AckKey);
             services.AddFilePathCreator(DeadKey);
-            services.AddFilePathCreator(MergedKey);
+            services.AddFilePathCreator(EnqueueMergedKey);
+            services.AddFilePathCreator(AckMergedKey);
+            services.AddFilePathCreator(DeadMergedKey);
             
             services.AddFileAppenders();
             
@@ -78,6 +83,8 @@ public static class DependencyInjection
             services.AddBrokerEngine();
             
             services.AddRequeueService();
+            
+            services.AddWalGarbageCollectorService();
         }
 
         private void AddMessageBrokerOptions()
@@ -93,6 +100,16 @@ public static class DependencyInjection
 
             services.AddSingleton<WalOptions>(sp => 
                 sp.GetRequiredService<IOptions<WalOptions>>().Value);
+            
+            services.AddSingleton<IOptions<GarbageCollectorOptions>>(sp =>
+            {
+                WalOptions options = sp.GetRequiredService<IOptions<WalOptions>>().Value;
+
+                return Options.Create(options.GarbageCollector);
+            });
+            
+            services.AddSingleton<GarbageCollectorOptions>(sp => 
+                sp.GetRequiredService<IOptions<GarbageCollectorOptions>>().Value);
             
             services.AddSingleton<IOptions<BrokerOptions>>(sp =>
             {
@@ -137,7 +154,9 @@ public static class DependencyInjection
                     EnqueueKey => walOptions.FileNaming.EnqueuePrefix,
                     AckKey => walOptions.FileNaming.AckPrefix,
                     DeadKey => walOptions.FileNaming.DeadPrefix,
-                    MergedKey => walOptions.FileNaming.EnqueueMergedPrefix,
+                    EnqueueMergedKey => walOptions.FileNaming.EnqueueMergedPrefix,
+                    AckMergedKey => walOptions.FileNaming.AckMergedPrefix,
+                    DeadMergedKey => walOptions.FileNaming.DeadMergedPrefix,
                     _ => throw new Exception("Unknown binding key.")
                 };
 
@@ -154,7 +173,6 @@ public static class DependencyInjection
             services.AddKeyedSingleton(EnqueueKey, CreateAppender<EnqueueWalEvent>);
             services.AddKeyedSingleton(AckKey, CreateAppender<AckWalEvent>);
             services.AddKeyedSingleton(DeadKey, CreateAppender<DeadWalEvent>);
-            services.AddKeyedSingleton(MergedKey, CreateAppender<EnqueueWalEvent>);
 
             services.AddSingleton<IFileAppender<EnqueueWalEvent>>(sp =>
                 sp.GetRequiredKeyedService<IFileAppender<EnqueueWalEvent>>(EnqueueKey));
@@ -164,6 +182,20 @@ public static class DependencyInjection
             
             services.AddSingleton<IFileAppender<DeadWalEvent>>(sp =>
                 sp.GetRequiredKeyedService<IFileAppender<DeadWalEvent>>(DeadKey));
+
+            services.AddSingleton<IFileAppenderFactory>(sp =>
+            {
+                ICrcProvider crcProvider = sp.GetRequiredService<ICrcProvider>();
+                var enqueuePathCreator = sp.GetRequiredKeyedService<IFilePathCreator>(EnqueueMergedKey);
+                var ackPathCreator = sp.GetRequiredKeyedService<IFilePathCreator>(AckMergedKey);
+                var deadPathCreator = sp.GetRequiredKeyedService<IFilePathCreator>(DeadMergedKey);
+
+                return new FixedFileAppenderFactory(
+                    crcProvider,
+                    enqueuePathCreator,
+                    ackPathCreator,
+                    deadPathCreator);
+            });
         }
 
         private void AddWriteAheadLog()
@@ -227,6 +259,13 @@ public static class DependencyInjection
 
                 return new RequeueBackgroundService(requeueService, interval, logger);
             });
+        }
+
+        private void AddWalGarbageCollectorService()
+        {
+            services.AddSingleton<IWalGarbageCollectorService, WalGarbageCollectorService>();
+
+            services.AddHostedService<WalGarbageCollectorBackgroundService>();
         }
     }
     

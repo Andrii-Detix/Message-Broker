@@ -3,6 +3,7 @@ using MessageBroker.Engine.Abstractions;
 using MessageBroker.Engine.Configurations;
 using MessageBroker.Engine.RequeueServices;
 using MessageBroker.Persistence.Configurations;
+using MessageBroker.Persistence.GarbageCollectors;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
@@ -53,6 +54,25 @@ public class DependencyInjectionTests : IDisposable
         
         // Assert
         var requeueService = actual.OfType<RequeueBackgroundService>().FirstOrDefault();
+        requeueService.ShouldNotBeNull();
+    }
+    
+    [Fact]
+    public void AddMessageBroker_CreatesGarbageCollectorBackgroundService_WhenConfigurationIsValid()
+    {
+        // Arrange
+        IConfiguration configuration = CreateConfiguration();
+        IServiceCollection services = CreateServiceCollection(configuration);
+        services.AddMessageBroker();
+        
+        using ServiceProvider provider = services.BuildServiceProvider();
+
+        // Act
+        var actual = provider.GetServices<IHostedService>();
+        
+        // Assert
+        var requeueService = actual.OfType<WalGarbageCollectorBackgroundService>()
+            .FirstOrDefault();
         requeueService.ShouldNotBeNull();
     }
 
@@ -112,6 +132,7 @@ public class DependencyInjectionTests : IDisposable
             {"MessageBroker:Wal:FileNaming:DeadPrefix", "dead"},
             {"MessageBroker:Wal:FileNaming:MergePrefix", "merge"},
             {"MessageBroker:Wal:Manifest:FileName", "meta.json"},
+            {"MessageBroker:Wal:Manifest:GarbageCollector:CollectInterval", "00:00:05"},
             
             {"MessageBroker:Broker:Message:MaxPayloadSize", "1024"},
             {"MessageBroker:Broker:Message:MaxDeliveryAttempts", "3"},

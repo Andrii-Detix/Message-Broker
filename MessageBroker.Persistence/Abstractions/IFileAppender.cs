@@ -2,7 +2,7 @@
 
 namespace MessageBroker.Persistence.Abstractions;
 
-public interface IFileAppender<in TEvent>
+public interface IFileAppender<in TEvent> : IDisposable
     where TEvent : WalEvent
 {
     void Append(TEvent evt);
