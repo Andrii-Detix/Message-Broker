@@ -4,7 +4,7 @@ using MessageBroker.EndToEndTests.Abstractions;
 using MessageBroker.EndToEndTests.Extensions;
 using Shouldly;
 
-namespace MessageBroker.EndToEndTests.Api;
+namespace MessageBroker.EndToEndTests.Tests;
 
 public class SmokeTests(BrokerFactory factory) : BaseFunctionalTest(factory)
 {

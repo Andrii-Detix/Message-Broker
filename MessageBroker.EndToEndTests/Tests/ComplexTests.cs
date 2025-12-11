@@ -3,7 +3,7 @@ using System.Text;
 using MessageBroker.EndToEndTests.Abstractions;
 using Shouldly;
 
-namespace MessageBroker.EndToEndTests.Api;
+namespace MessageBroker.EndToEndTests.Tests;
 
 public class ComplexTests(BrokerFactory factory) : BaseFunctionalTest(factory)
 {
