@@ -25,7 +25,8 @@ public abstract class BaseFunctionalTest : IClassFixture<BrokerFactory>, IDispos
         
         var isolatedFactory = factory.WithOptions(new Dictionary<string, string?>
         {
-            { "MessageBroker:Wal:Directory", WalDirectory }
+            { "MessageBroker:Wal:Directory", WalDirectory },
+            { "MessageBroker:Wal:ResetOnStartup", "true" }
         });
         
         _isolatedFactory = isolatedFactory;
