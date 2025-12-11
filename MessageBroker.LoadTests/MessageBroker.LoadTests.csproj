@@ -11,6 +11,9 @@
         <PackageReference Include="Bogus" />
         <PackageReference Include="coverlet.collector" />
         <PackageReference Include="Microsoft.NET.Test.Sdk" />
+        <PackageReference Include="NBomber" />
+        <PackageReference Include="NBomber.Data" />
+        <PackageReference Include="NBomber.Http" />
         <PackageReference Include="xunit" />
         <PackageReference Include="xunit.runner.visualstudio" />
     </ItemGroup>
