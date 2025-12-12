@@ -1,4 +1,7 @@
-﻿namespace MessageBroker.LoadTests.Scenarios;
+﻿using NBomber.Contracts;
+using NBomber.CSharp;
+
+namespace MessageBroker.LoadTests.Scenarios;
 
 public record LoadTestConfig
 {
@@ -7,9 +10,11 @@ public record LoadTestConfig
     public int PayloadMinBytes { get; init; } = 512;
     public int PayloadMaxBytes { get; init; } = 4096;
     
-    public int VirtualUsers { get; init; } = 100;
-    
     public TimeSpan WarmUp { get; init; } = TimeSpan.FromSeconds(5);
-    public TimeSpan RampUp { get; init; } = TimeSpan.FromSeconds(10);
-    public TimeSpan KeepStable { get; init; } = TimeSpan.FromSeconds(30);
+
+    public LoadSimulation[] Simulations { get; init; } = 
+    [
+        Simulation.RampingConstant(copies: 100, during: TimeSpan.FromSeconds(10)),
+        Simulation.KeepConstant(copies: 100, during: TimeSpan.FromSeconds(30))
+    ];
 }
