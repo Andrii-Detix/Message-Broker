@@ -5,7 +5,10 @@
         <ImplicitUsings>enable</ImplicitUsings>
         <Nullable>enable</Nullable>
         <IsPackable>false</IsPackable>
+        <IsTestProject>false</IsTestProject>
     </PropertyGroup>
+
+
 
     <ItemGroup>
         <PackageReference Include="Bogus" />
