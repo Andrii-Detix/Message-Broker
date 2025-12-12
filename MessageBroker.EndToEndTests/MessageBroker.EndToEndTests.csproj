@@ -24,10 +24,4 @@
       <ProjectReference Include="..\MessageBroker.Api\MessageBroker.Api.csproj" />
     </ItemGroup>
 
-    <ItemGroup>
-      <None Update="appsettings.Testing.json">
-        <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-      </None>
-    </ItemGroup>
-
 </Project>
