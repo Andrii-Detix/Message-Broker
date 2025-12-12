@@ -5,10 +5,9 @@
         <ImplicitUsings>enable</ImplicitUsings>
         <Nullable>enable</Nullable>
         <IsPackable>false</IsPackable>
-        <IsTestProject>false</IsTestProject>
+        <IsTestProject Condition="'$(CI)' != 'true'">true</IsTestProject>
+        <IsTestProject Condition="'$(CI)' == 'true'">false</IsTestProject>
     </PropertyGroup>
-
-
 
     <ItemGroup>
         <PackageReference Include="Bogus" />

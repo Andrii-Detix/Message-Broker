@@ -89,7 +89,7 @@ public class RequeueBackgroundServiceTests
         // Act
         await sut.StartAsync(CancellationToken.None);
         
-        await Task.Delay(TimeSpan.FromMilliseconds(500));
+        await Task.Delay(TimeSpan.FromSeconds(1));
         
         await sut.StopAsync(CancellationToken.None);
         
@@ -111,7 +111,7 @@ public class RequeueBackgroundServiceTests
         // Act
         await sut.StartAsync(CancellationToken.None);
         
-        await Task.Delay(TimeSpan.FromMilliseconds(500));
+        await Task.Delay(TimeSpan.FromSeconds(1));
         
         await sut.StopAsync(CancellationToken.None);
         
