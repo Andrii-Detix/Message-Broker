@@ -1,4 +1,6 @@
-﻿using DotNet.Testcontainers.Builders;
+﻿using System.Diagnostics;
+using System.Runtime.InteropServices;
+using DotNet.Testcontainers.Builders;
 using DotNet.Testcontainers.Containers;
 
 namespace MessageBroker.EndToEndTests.Abstractions;
@@ -23,6 +25,14 @@ public static class BrokerContainerFactory
             .WithEnvironment("MessageBroker__Wal__ResetOnStartup", resetOnStart.ToString())
             .WithWaitStrategy(Wait.ForUnixContainer().UntilInternalTcpPortIsAvailable(InternalPort));
 
+        if (RuntimeInformation.IsOSPlatform(OSPlatform.Linux))
+        {
+            builder = builder.WithCreateParameterModifier(parameter => 
+            {
+                parameter.User = GetLinuxUserId(); 
+            });
+        }
+        
         if (!string.IsNullOrWhiteSpace(hostDirectory))
         {
             builder = builder.WithBindMount(hostDirectory, MountPoint);
@@ -37,5 +47,31 @@ public static class BrokerContainerFactory
         }
         
         return builder.Build();
+    }
+    
+    private static string GetLinuxUserId()
+    {
+        try
+        {
+            Process process = new()
+            {
+                StartInfo = new ProcessStartInfo
+                {
+                    FileName = "id",
+                    Arguments = "-u",
+                    RedirectStandardOutput = true,
+                    UseShellExecute = false,
+                    CreateNoWindow = true
+                }
+            };
+            process.Start();
+            string output = process.StandardOutput.ReadToEnd();
+            process.WaitForExit();
+            return output.Trim();
+        }
+        catch
+        {
+            return "0";
+        }
     }
 }
