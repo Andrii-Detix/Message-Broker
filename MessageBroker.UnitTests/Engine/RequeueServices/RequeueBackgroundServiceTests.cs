@@ -1,6 +1,6 @@
 ﻿using MessageBroker.Engine.Abstractions;
-using MessageBroker.Engine.RequeueServices;
-using MessageBroker.Engine.RequeueServices.Exceptions;
+using MessageBroker.Engine.Services.Requeue;
+using MessageBroker.Engine.Services.Requeue.Exceptions;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Time.Testing;
 using Moq;

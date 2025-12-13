@@ -1,7 +1,7 @@
 ﻿using MessageBroker.Core.Abstractions;
 using MessageBroker.Engine.Abstractions;
 using MessageBroker.Engine.Configurations;
-using MessageBroker.Engine.RequeueServices;
+using MessageBroker.Engine.Services.Requeue;
 using MessageBroker.Persistence.Configurations;
 using MessageBroker.Persistence.Services.GarbageCollector;
 using Microsoft.Extensions.Configuration;

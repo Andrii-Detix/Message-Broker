@@ -1,9 +1,9 @@
 ﻿using MessageBroker.Engine.Abstractions;
-using MessageBroker.Engine.RequeueServices.Exceptions;
+using MessageBroker.Engine.Services.Requeue.Exceptions;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 
-namespace MessageBroker.Engine.RequeueServices;
+namespace MessageBroker.Engine.Services.Requeue;
 
 public class RequeueBackgroundService : BackgroundService
 {
