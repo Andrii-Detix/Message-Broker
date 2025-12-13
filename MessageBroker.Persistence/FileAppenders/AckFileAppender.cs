@@ -1,4 +1,5 @@
 ﻿using MessageBroker.Persistence.Abstractions;
+using MessageBroker.Persistence.Constants;
 using MessageBroker.Persistence.Events;
 
 namespace MessageBroker.Persistence.FileAppenders;
@@ -12,7 +13,7 @@ public class AckFileAppender(
     public override void Append(AckWalEvent evt)
     {
         // Format: message_id (16)
-        Span<byte> buffer = stackalloc byte[16];
+        Span<byte> buffer = stackalloc byte[BinaryLayout.GuidSize];
         
         evt.MessageId.TryWriteBytes(buffer);
         

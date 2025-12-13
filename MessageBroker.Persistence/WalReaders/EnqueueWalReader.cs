@@ -1,6 +1,7 @@
 ﻿using System.Buffers.Binary;
 using MessageBroker.Persistence.Abstractions;
 using MessageBroker.Persistence.Common.Exceptions;
+using MessageBroker.Persistence.Constants;
 using MessageBroker.Persistence.Events;
 
 namespace MessageBroker.Persistence.WalReaders;
@@ -10,20 +11,16 @@ public class EnqueueWalReader(ICrcProvider crcProvider)
 {
     protected override EnqueueWalEvent ParseToEvent(ReadOnlySpan<byte> data)
     {
-        const int intSize = 4;
-        const int guidSize = 16;
-
         int offset = 0;
 
         WalEventType eventType = (WalEventType)BinaryPrimitives
-            .ReadInt32LittleEndian(data.Slice(offset, intSize));
-        offset += intSize;
+            .ReadInt32LittleEndian(data.Slice(offset, BinaryLayout.IntSize));
+        offset += BinaryLayout.IntSize;
         
-        Guid messageId = new Guid(data.Slice(offset, guidSize));
-        offset += guidSize;
+        Guid messageId = new Guid(data.Slice(offset, BinaryLayout.GuidSize));
+        offset += BinaryLayout.GuidSize;
 
-        int payloadLength = data.Length - intSize - guidSize;
-        byte[] payload = data.Slice(offset, payloadLength).ToArray();
+        byte[] payload = data.Slice(offset).ToArray();
 
         EnqueueWalEvent evt = eventType switch
         {
