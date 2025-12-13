@@ -3,7 +3,6 @@ using MessageBroker.Core.Messages.Exceptions;
 using MessageBroker.Core.Messages.Models;
 using MessageBroker.Engine.Abstractions;
 using MessageBroker.Engine.BrokerEngines.Exceptions;
-using MessageBroker.Engine.Common.Exceptions;
 using MessageBroker.Persistence.Abstractions;
 using MessageBroker.Persistence.Events;
 namespace MessageBroker.Engine.BrokerEngines;

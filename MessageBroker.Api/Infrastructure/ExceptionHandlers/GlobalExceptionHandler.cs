@@ -1,5 +1,4 @@
 ﻿using MessageBroker.Engine.BrokerEngines.Exceptions;
-using MessageBroker.Engine.Common.Exceptions;
 using Microsoft.AspNetCore.Diagnostics;
 using Microsoft.AspNetCore.Mvc;
 

@@ -1,7 +1,6 @@
 ﻿using System.Text.Json;
 using MessageBroker.Api.Infrastructure.ExceptionHandlers;
 using MessageBroker.Engine.BrokerEngines.Exceptions;
-using MessageBroker.Engine.Common.Exceptions;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Logging;

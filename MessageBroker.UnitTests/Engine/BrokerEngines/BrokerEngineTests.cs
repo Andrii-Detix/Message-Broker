@@ -4,8 +4,8 @@ using MessageBroker.Core.Messages.Exceptions;
 using MessageBroker.Core.Messages.Models;
 using MessageBroker.Engine.BrokerEngines;
 using MessageBroker.Engine.BrokerEngines.Exceptions;
-using MessageBroker.Engine.Common.Exceptions;
 using MessageBroker.Persistence.Abstractions;
+using MessageBroker.Persistence.Common.Exceptions;
 using MessageBroker.Persistence.Events;
 using Microsoft.Extensions.Time.Testing;
 using Moq;
@@ -224,7 +224,7 @@ public class BrokerEngineTests
     {
         // Arrange
         _walMock.Setup(w => w.Append(It.IsAny<WalEvent>()))
-            .Throws(new BrokerStorageException());
+            .Throws(new WalStorageException("Custom exception"));
         _queueMock.Setup(q => q.TryEnqueue(It.IsAny<Message>()))
             .Returns(true);
 
@@ -234,7 +234,7 @@ public class BrokerEngineTests
         Action actual = () => sut.Publish([0x01, 0x02]);
         
         // Assert
-        actual.ShouldThrow<BrokerStorageException>();
+        actual.ShouldThrow<WalStorageException>();
     }
 
     [Fact]
@@ -358,7 +358,7 @@ public class BrokerEngineTests
     {
         // Arrange
         _walMock.Setup(w => w.Append(It.IsAny<AckWalEvent>()))
-            .Throws(new BrokerStorageException());
+            .Throws(new WalStorageException("Custom exception"));
         
         BrokerEngine sut = CreateSut();
         
@@ -368,7 +368,7 @@ public class BrokerEngineTests
         Action actual = () => sut.Ack(messageId);
         
         // Assert
-        actual.ShouldThrow<BrokerStorageException>();
+        actual.ShouldThrow<WalStorageException>();
         
         _queueMock.Verify(q => q.Ack(messageId), Times.Never);
     }
