@@ -1,10 +1,10 @@
 ﻿using MessageBroker.Persistence.Abstractions;
 using MessageBroker.Persistence.Configurations;
-using MessageBroker.Persistence.GarbageCollectors.Exceptions;
+using MessageBroker.Persistence.Services.GarbageCollector.Exceptions;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 
-namespace MessageBroker.Persistence.GarbageCollectors;
+namespace MessageBroker.Persistence.Services.GarbageCollector;
 
 public class WalGarbageCollectorBackgroundService : BackgroundService
 {

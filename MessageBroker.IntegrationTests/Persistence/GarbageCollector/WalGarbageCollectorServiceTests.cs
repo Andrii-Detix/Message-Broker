@@ -1,7 +1,7 @@
 ﻿using MessageBroker.Persistence.Abstractions;
 using MessageBroker.Persistence.Events;
-using MessageBroker.Persistence.GarbageCollectors;
 using MessageBroker.Persistence.Manifests;
+using MessageBroker.Persistence.Services.GarbageCollector;
 using Moq;
 using Shouldly;
 

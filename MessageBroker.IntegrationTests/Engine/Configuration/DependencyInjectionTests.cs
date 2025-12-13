@@ -3,7 +3,7 @@ using MessageBroker.Engine.Abstractions;
 using MessageBroker.Engine.Configurations;
 using MessageBroker.Engine.RequeueServices;
 using MessageBroker.Persistence.Configurations;
-using MessageBroker.Persistence.GarbageCollectors;
+using MessageBroker.Persistence.Services.GarbageCollector;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;

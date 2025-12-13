@@ -1,4 +1,4 @@
-﻿namespace MessageBroker.Persistence.Recovery;
+﻿namespace MessageBroker.Persistence.Services.Recovery;
 
 public record RecoveredMessageDto(Guid MessageId, byte[] Payload)
 {

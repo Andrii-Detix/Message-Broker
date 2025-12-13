@@ -17,4 +17,8 @@
       <PackageReference Include="System.IO.Hashing" />
     </ItemGroup>
 
+    <ItemGroup>
+      <Folder Include="Services\" />
+    </ItemGroup>
+
 </Project>

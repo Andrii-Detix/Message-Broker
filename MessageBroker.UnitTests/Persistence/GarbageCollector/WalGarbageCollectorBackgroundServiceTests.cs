@@ -1,7 +1,7 @@
 ﻿using MessageBroker.Persistence.Abstractions;
 using MessageBroker.Persistence.Configurations;
-using MessageBroker.Persistence.GarbageCollectors;
-using MessageBroker.Persistence.GarbageCollectors.Exceptions;
+using MessageBroker.Persistence.Services.GarbageCollector;
+using MessageBroker.Persistence.Services.GarbageCollector.Exceptions;
 using Microsoft.Extensions.Logging;
 using Moq;
 using Shouldly;
