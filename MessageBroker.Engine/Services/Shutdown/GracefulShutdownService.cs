@@ -2,7 +2,7 @@
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 
-namespace MessageBroker.Engine.ShutdownServices;
+namespace MessageBroker.Engine.Services.Shutdown;
 
 public class GracefulShutdownService(
     IHostApplicationLifetime appLifetime, 

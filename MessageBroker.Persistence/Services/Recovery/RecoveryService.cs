@@ -5,7 +5,8 @@ using MessageBroker.Persistence.Abstractions;
 using MessageBroker.Persistence.Configurations;
 using MessageBroker.Persistence.Events;
 using MessageBroker.Persistence.Manifests;
-namespace MessageBroker.Persistence.Recovery;
+
+namespace MessageBroker.Persistence.Services.Recovery;
 
 public class RecoveryService : IRecoveryService
 {

@@ -1,8 +1,9 @@
 ﻿using MessageBroker.Persistence.Abstractions;
 using MessageBroker.Persistence.Configurations;
-using MessageBroker.Persistence.GarbageCollectors;
-using MessageBroker.Persistence.GarbageCollectors.Exceptions;
+using MessageBroker.Persistence.Services.GarbageCollector;
+using MessageBroker.Persistence.Services.GarbageCollector.Exceptions;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Time.Testing;
 using Moq;
 using Shouldly;
 
@@ -28,9 +29,28 @@ public class WalGarbageCollectorBackgroundServiceTests
             CollectInterval = TimeSpan.FromMilliseconds(150),
         };
         ILogger<WalGarbageCollectorBackgroundService> logger = _loggerMock.Object;
+        FakeTimeProvider timeProvider = new();
         
         // Act
-        Action actual = () => new WalGarbageCollectorBackgroundService(null!, options, logger);
+        Action actual = () => new WalGarbageCollectorBackgroundService(null!, options, timeProvider, logger);
+        
+        // Assert
+        actual.ShouldThrow<ArgumentNullException>();
+    }
+
+    [Fact]
+    public void Constructor_ThrowsException_WhenTimeProviderIsNull()
+    {
+        // Arrange
+        GarbageCollectorOptions options = new()
+        {
+            CollectInterval = TimeSpan.FromMilliseconds(150),
+        };
+        IWalGarbageCollectorService gcService = _gcService.Object;
+        ILogger<WalGarbageCollectorBackgroundService> logger = _loggerMock.Object;
+        
+        // Act
+        Action actual = () => new WalGarbageCollectorBackgroundService(gcService, options, null!, logger);
         
         // Assert
         actual.ShouldThrow<ArgumentNullException>();
@@ -48,9 +68,10 @@ public class WalGarbageCollectorBackgroundServiceTests
         };
         IWalGarbageCollectorService gcService = _gcService.Object;
         ILogger<WalGarbageCollectorBackgroundService> logger = _loggerMock.Object;
+        FakeTimeProvider timeProvider = new();
         
         // Act
-        Action actual = () => new WalGarbageCollectorBackgroundService(gcService, options, logger);
+        Action actual = () => new WalGarbageCollectorBackgroundService(gcService, options, timeProvider, logger);
         
         // Assert
         actual.ShouldThrow<CollectIntervalInvalidException>();
@@ -66,9 +87,10 @@ public class WalGarbageCollectorBackgroundServiceTests
         };
         IWalGarbageCollectorService gcService = _gcService.Object;
         ILogger<WalGarbageCollectorBackgroundService> logger = _loggerMock.Object;
+        FakeTimeProvider timeProvider = new();
         
         // Act
-        using WalGarbageCollectorBackgroundService sut = new(gcService, options, logger);
+        using WalGarbageCollectorBackgroundService sut = new(gcService, options, timeProvider, logger);
         
         // Assert
         sut.ShouldNotBeNull();
@@ -84,13 +106,18 @@ public class WalGarbageCollectorBackgroundServiceTests
         };
         IWalGarbageCollectorService gcService = _gcService.Object;
         ILogger<WalGarbageCollectorBackgroundService> logger = _loggerMock.Object;
+        FakeTimeProvider timeProvider = new();
         
-        using WalGarbageCollectorBackgroundService sut = new(gcService, options, logger);
+        using WalGarbageCollectorBackgroundService sut = new(gcService, options, timeProvider, logger);
         
         // Act
         await sut.StartAsync(CancellationToken.None);
         
-        await Task.Delay(TimeSpan.FromMilliseconds(500));
+        for (int i = 0; i < 3; i++)
+        {
+            timeProvider.Advance(TimeSpan.FromSeconds(10.1));
+            await Task.Delay(500);
+        }
         
         await sut.StopAsync(CancellationToken.None);
         
@@ -111,13 +138,18 @@ public class WalGarbageCollectorBackgroundServiceTests
         };
         IWalGarbageCollectorService gcService = _gcService.Object;
         ILogger<WalGarbageCollectorBackgroundService> logger = _loggerMock.Object;
+        FakeTimeProvider timeProvider = new();
         
-        using WalGarbageCollectorBackgroundService sut = new(gcService, options, logger);
+        using WalGarbageCollectorBackgroundService sut = new(gcService, options, timeProvider, logger);
         
         // Act
         await sut.StartAsync(CancellationToken.None);
         
-        await Task.Delay(TimeSpan.FromMilliseconds(500));
+        for (int i = 0; i < 3; i++)
+        {
+            timeProvider.Advance(TimeSpan.FromSeconds(10.1));
+            await Task.Delay(500);
+        }
         
         await sut.StopAsync(CancellationToken.None);
         

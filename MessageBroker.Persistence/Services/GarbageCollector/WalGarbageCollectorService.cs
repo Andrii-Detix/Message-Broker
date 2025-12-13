@@ -2,7 +2,7 @@
 using MessageBroker.Persistence.Events;
 using MessageBroker.Persistence.Manifests;
 
-namespace MessageBroker.Persistence.GarbageCollectors;
+namespace MessageBroker.Persistence.Services.GarbageCollector;
 
 public class WalGarbageCollectorService : IWalGarbageCollectorService
 {

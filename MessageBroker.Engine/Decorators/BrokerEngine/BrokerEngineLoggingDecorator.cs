@@ -2,7 +2,7 @@
 using MessageBroker.Engine.Abstractions;
 using Microsoft.Extensions.Logging;
 
-namespace MessageBroker.Engine.BrokerEngines;
+namespace MessageBroker.Engine.Decorators.BrokerEngine;
 
 public class BrokerEngineLoggingDecorator(
     IBrokerEngine innerEngine,

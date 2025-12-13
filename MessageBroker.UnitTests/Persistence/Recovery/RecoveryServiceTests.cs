@@ -5,7 +5,7 @@ using MessageBroker.Persistence.Abstractions;
 using MessageBroker.Persistence.Configurations;
 using MessageBroker.Persistence.Events;
 using MessageBroker.Persistence.Manifests;
-using MessageBroker.Persistence.Recovery;
+using MessageBroker.Persistence.Services.Recovery;
 using Microsoft.Extensions.Time.Testing;
 using Moq;
 using Shouldly;
