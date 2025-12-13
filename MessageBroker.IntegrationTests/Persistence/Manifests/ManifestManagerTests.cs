@@ -1,7 +1,7 @@
 ﻿using System.Text.Json;
 using MessageBroker.Persistence.Configurations;
 using MessageBroker.Persistence.Manifests;
-using Microsoft.Extensions.Options;
+using MessageBroker.Persistence.Manifests.Exceptions;
 using Shouldly;
 
 namespace MessageBroker.IntegrationTests.Persistence.Manifests;
@@ -40,7 +40,7 @@ public class ManifestManagerTests : IDisposable
     public void Load_ReturnsEmptyManifest_WhenFileDoesNotExist()
     {
         // Arrange
-        ManifestManager sut = new(Options.Create(_config));
+        ManifestManager sut = new(_config);
 
         // Act
         WalManifest actual = sut.Load();
@@ -55,24 +55,18 @@ public class ManifestManagerTests : IDisposable
     }
     
     [Fact]
-    public void Load_ReturnsEmptyManifest_WhenFileIsCorrupted()
+    public void Load_ThrowsException_WhenManifestFileIsCorrupted()
     {
         // Arrange
         string manifestPath = Path.Combine(_directory, "manifest.json");
         File.WriteAllText(manifestPath, "{ invalid json ... ");
-        ManifestManager sut = new(Options.Create(_config));
+        ManifestManager sut = new(_config);
 
         // Act
-        WalManifest actual = sut.Load();
+        Action actual = () => sut.Load();
 
         // Assert
-        actual.ShouldNotBeNull();
-        actual.Enqueue.ShouldBeEmpty();
-        actual.Ack.ShouldBeEmpty();
-        actual.Dead.ShouldBeEmpty();
-        actual.EnqueueMerged.ShouldBeEmpty();
-        actual.EnqueueMerged.ShouldBeEmpty();
-        actual.AckMerged.ShouldBeEmpty();
+        actual.ShouldThrow<ManifestFileCorruptedException>();
     }
 
     [Fact]
@@ -80,7 +74,7 @@ public class ManifestManagerTests : IDisposable
     {
         // Arrange
         string manifestPath = Path.Combine(_directory, "manifest.json");
-        ManifestManager sut = new(Options.Create(_config));
+        ManifestManager sut = new(_config);
 
         WalManifest manifest = new()
         {
@@ -107,7 +101,7 @@ public class ManifestManagerTests : IDisposable
     public void Save_WritesManifestToFile()
     {
         // Arrange
-        ManifestManager sut = new(Options.Create(_config));
+        ManifestManager sut = new(_config);
         WalManifest manifest = new()
         {
             Enqueue = "enqueue-20251205180044-1.log",
@@ -133,7 +127,7 @@ public class ManifestManagerTests : IDisposable
     public void Save_NormalizeFileNames_WhenContainsRedundantParts()
     {
         // Arrange
-        ManifestManager sut = new(Options.Create(_config));
+        ManifestManager sut = new(_config);
         WalManifest manifest = new()
         {
             Enqueue = "some/directory/enqueue-20251205180044-1.log",
@@ -166,7 +160,7 @@ public class ManifestManagerTests : IDisposable
         File.Create(Path.Combine(_directory, file2)).Dispose();
         File.Create(Path.Combine(_directory, file3)).Dispose();
 
-        ManifestManager sut = new(Options.Create(_config));
+        ManifestManager sut = new(_config);
         sut.Save(new() {Enqueue = file2});
         
         // Act
@@ -194,7 +188,7 @@ public class ManifestManagerTests : IDisposable
         File.Create(Path.Combine(_directory, file2)).Dispose();
         File.Create(Path.Combine(_directory, file3)).Dispose();
 
-        ManifestManager sut = new(Options.Create(_config));
+        ManifestManager sut = new(_config);
         sut.Save(new() {Enqueue = "enqueue-20251205180045-100000.log"});
         
         // Act
@@ -224,7 +218,7 @@ public class ManifestManagerTests : IDisposable
         File.Create(Path.Combine(_directory, file3)).Dispose();
         File.Create(Path.Combine(_directory, file4)).Dispose();
 
-        ManifestManager sut = new(Options.Create(_config));
+        ManifestManager sut = new(_config);
         
         // Act
         WalFiles actual = sut.LoadWalFiles();
@@ -244,7 +238,7 @@ public class ManifestManagerTests : IDisposable
     public void LoadWalFiles_ReturnsWithMergedFile_WhenItExistsOnDisk()
     {
         // Arrange
-        ManifestManager sut = new(Options.Create(_config));
+        ManifestManager sut = new(_config);
         string mergedFile = "enqueue-merged-20251205180045-2.log";
         string file1 = "enqueue-20251205180044-1.log";
         string file2 = "enqueue-20251205180044-2.log";
@@ -289,7 +283,7 @@ public class ManifestManagerTests : IDisposable
         File.Create(Path.Combine(_directory, ackMerged)).Dispose();
         File.Create(Path.Combine(_directory, deadMerged)).Dispose();
 
-        ManifestManager sut = new(Options.Create(_config));
+        ManifestManager sut = new(_config);
     
         // Act
         WalFiles actual = sut.LoadWalFiles();
@@ -312,7 +306,7 @@ public class ManifestManagerTests : IDisposable
             Directory.Delete(_directory, true);
         }
     
-        ManifestManager sut = new(Options.Create(_config));
+        ManifestManager sut = new(_config);
 
         // Act
         WalFiles actual = sut.LoadWalFiles();
@@ -333,7 +327,7 @@ public class ManifestManagerTests : IDisposable
         File.Create(Path.Combine(_directory, file1)).Dispose();
         File.Create(Path.Combine(_directory, file2)).Dispose();
 
-        ManifestManager sut = new(Options.Create(_config));
+        ManifestManager sut = new(_config);
     
         sut.Save(new WalManifest { Enqueue = string.Empty }); 
 
@@ -342,6 +336,29 @@ public class ManifestManagerTests : IDisposable
 
         // Assert
         actual.EnqueueFiles.Count.ShouldBe(2);
+    }
+    
+    [Fact]
+    public void LoadWalFiles_DoesNotDuplicateMergedFile_WhenItIsAlsoLocatedInDirectory()
+    {
+        // Arrange
+        string mergedFile = "enqueue-merged-20251205180044-1.log";
+        string regularFile = "enqueue-20251205180045-2.log";
+
+        File.Create(Path.Combine(_directory, mergedFile)).Dispose();
+        File.Create(Path.Combine(_directory, regularFile)).Dispose();
+
+        ManifestManager sut = new(_config);
+    
+        sut.Save(new WalManifest { EnqueueMerged = mergedFile });
+
+        // Act
+        WalFiles actual = sut.LoadWalFiles();
+
+        // Assert
+        actual.EnqueueFiles.Count.ShouldBe(2);
+        actual.EnqueueFiles[0].ShouldEndWith(mergedFile);
+        actual.EnqueueFiles[1].ShouldEndWith(regularFile);
     }
     
     public void Dispose()
