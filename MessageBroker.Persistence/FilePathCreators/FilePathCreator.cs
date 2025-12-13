@@ -1,16 +1,13 @@
 ﻿using System.Globalization;
 using System.Text;
 using MessageBroker.Persistence.Abstractions;
+using MessageBroker.Persistence.Constants;
 using MessageBroker.Persistence.FilePathCreators.Exceptions;
 
 namespace MessageBroker.Persistence.FilePathCreators;
 
 public class FilePathCreator : IFilePathCreator
 {
-    private const char NameSeparator = '-';
-    private const char ExtensionSeparator = '.';
-    private const int StartSegmentNumber = 1;
-    
     private readonly string _directoryPath;
     private readonly string _prefix;
     private readonly string _extension;
@@ -32,7 +29,7 @@ public class FilePathCreator : IFilePathCreator
             throw new FileNamePrefixEmptyException();
         }
 
-        extension = extension?.Trim().Trim(ExtensionSeparator);
+        extension = extension?.Trim().Trim(FileConstants.ExtensionSeparator);
         
         if (string.IsNullOrEmpty(extension))
         {
@@ -53,13 +50,13 @@ public class FilePathCreator : IFilePathCreator
 
         builder.Append(_prefix);
 
-        builder.Append(NameSeparator);
-        builder.Append(_timestamp.ToString("yyyyMMddHHmmss", CultureInfo.InvariantCulture));
+        builder.Append(FileConstants.NamePartSeparator);
+        builder.Append(_timestamp.ToString(FileConstants.TimestampFormat, CultureInfo.InvariantCulture));
 
-        builder.Append(NameSeparator);
+        builder.Append(FileConstants.NamePartSeparator);
         builder.Append(_segmentNumber);
 
-        builder.Append(ExtensionSeparator);
+        builder.Append(FileConstants.ExtensionSeparator);
         builder.Append(_extension);
         
         string fileName = builder.ToString();
@@ -81,6 +78,6 @@ public class FilePathCreator : IFilePathCreator
         }
         
         _timestamp = now;
-        _segmentNumber = StartSegmentNumber;
+        _segmentNumber = FileConstants.StartSegmentNumber;
     }
 }

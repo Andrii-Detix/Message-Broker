@@ -1,11 +1,10 @@
 ﻿using System.Globalization;
+using MessageBroker.Persistence.Constants;
 
 namespace MessageBroker.Persistence.Extensions;
 
 public static class WalFormatExtensions
 {
-    private const string TimestampFormat = "yyyyMMddHHmmss";
-    
     extension(IEnumerable<string> files)
     {
         public IEnumerable<string> OrderByWalFormat()
@@ -25,7 +24,7 @@ public static class WalFormatExtensions
         {
             string fileName = Path.GetFileNameWithoutExtension(filePath);
             
-            string[] parts = fileName.Split('-');
+            string[] parts = fileName.Split(FileConstants.NamePartSeparator);
 
             if (parts.Length < 3)
             {
@@ -40,7 +39,7 @@ public static class WalFormatExtensions
                 return null;
             }
             
-            if (!DateTimeOffset.TryParseExact(timePart, TimestampFormat, 
+            if (!DateTimeOffset.TryParseExact(timePart, FileConstants.TimestampFormat, 
                     CultureInfo.InvariantCulture, DateTimeStyles.None, out var creationTime))
             {
                 return null;
