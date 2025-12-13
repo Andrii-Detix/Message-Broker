@@ -1,4 +1,7 @@
-﻿using MessageBroker.Core.Abstractions;
+﻿using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
+using Microsoft.Extensions.Options;
+using MessageBroker.Core.Abstractions;
 using MessageBroker.Core.Configurations;
 using MessageBroker.Core.ExpiredMessagePolicies;
 using MessageBroker.Core.Queues;
@@ -19,10 +22,7 @@ using MessageBroker.Persistence.Services.GarbageCollector;
 using MessageBroker.Persistence.Services.Recovery;
 using MessageBroker.Persistence.WalReaders;
 using MessageBroker.Persistence.WriteAheadLogs;
-using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Logging;
-using Microsoft.Extensions.Options;
 
 namespace MessageBroker.Engine.Configurations;
 
@@ -34,278 +34,168 @@ public static class DependencyInjection
     private const string EnqueueMergedKey = "Enqueue-Merged";
     private const string AckMergedKey = "Ack-Merged";
     private const string DeadMergedKey = "Dead-Merged";
-    
+
     extension(IServiceCollection services)
     {
-        public void AddMessageBroker()
+        public IServiceCollection AddMessageBroker()
         {
             services.AddMessageBrokerOptions();
-            
-            services.TryAddSingleton(TimeProvider.System);
-            services.AddSingleton<ICriticalErrorService, GracefulShutdownService>();
-            services.AddSingleton<ICrcProvider, CrcProvider>();
-            
-            services.AddSingleton(CreateReader<EnqueueWalEvent>);
-            services.AddSingleton(CreateReader<AckWalEvent>);
-            services.AddSingleton(CreateReader<DeadWalEvent>);
+            services.AddCoreServices();
+            services.AddPersistenceServices();
+            services.AddBrokerEngineServices();
+            services.AddBackgroundServices();
 
-            services.AddSingleton<IManifestManager, ManifestManager>();
-
-            services.AddSingleton<IMessageQueueFactory, MessageQueueFactory>();
-
-            services.AddTransient<IRecoveryService, RecoveryService>();
-
-            services.AddSingleton<IMessageQueue>(sp =>
-            {
-                IRecoveryService recoveryService = sp.GetRequiredService<IRecoveryService>();
-
-                return recoveryService.Recover();
-            });
-            
-            services.AddFilePathCreator(EnqueueKey);
-            services.AddFilePathCreator(AckKey);
-            services.AddFilePathCreator(DeadKey);
-            services.AddFilePathCreator(EnqueueMergedKey);
-            services.AddFilePathCreator(AckMergedKey);
-            services.AddFilePathCreator(DeadMergedKey);
-            
-            services.AddFileAppenders();
-            
-            services.AddWriteAheadLog();
-            
-            services.AddSingleton<IExpiredMessagePolicy>(sp =>
-            {
-                TimeProvider timeProvider = sp.GetRequiredService<TimeProvider>();
-                BrokerOptions options = sp.GetRequiredService<IOptions<BrokerOptions>>().Value;
-
-                return new ExpiredMessagePolicy(options.ExpiredPolicy.ExpirationTime, timeProvider);
-            });
-            
-            services.AddBrokerEngine();
-            
-            services.AddRequeueService();
-            
-            services.AddWalGarbageCollectorService();
+            return services;
         }
 
         private void AddMessageBrokerOptions()
         {
             services.ConfigureOptions<MessageBrokerOptionsSetup>();
 
-            services.AddSingleton<IOptions<WalOptions>>(sp =>
-            {
-                MessageBrokerOptions options = sp.GetRequiredService<IOptions<MessageBrokerOptions>>().Value;
-
-                return Options.Create(options.Wal);
-            });
-
-            services.AddSingleton<WalOptions>(sp => 
-                sp.GetRequiredService<IOptions<WalOptions>>().Value);
-            
-            services.AddSingleton<IOptions<GarbageCollectorOptions>>(sp =>
-            {
-                WalOptions options = sp.GetRequiredService<IOptions<WalOptions>>().Value;
-
-                return Options.Create(options.GarbageCollector);
-            });
-            
-            services.AddSingleton<GarbageCollectorOptions>(sp => 
-                sp.GetRequiredService<IOptions<GarbageCollectorOptions>>().Value);
-            
-            services.AddSingleton<IOptions<BrokerOptions>>(sp =>
-            {
-                MessageBrokerOptions options = sp.GetRequiredService<IOptions<MessageBrokerOptions>>().Value;
-
-                return Options.Create(options.Broker);
-            });
-            
-            services.AddSingleton<BrokerOptions>(sp => 
-                sp.GetRequiredService<IOptions<BrokerOptions>>().Value);
-            
-            services.AddSingleton<IOptions<MessageQueueOptions>>(sp =>
-            {
-                BrokerOptions options = sp.GetRequiredService<IOptions<BrokerOptions>>().Value;
-
-                return Options.Create(options.Queue);
-            });
-            
-            services.AddSingleton<MessageQueueOptions>(sp =>
-                sp.GetRequiredService<IOptions<MessageQueueOptions>>().Value);
-            
-            services.AddSingleton<IOptions<MessageOptions>>(sp =>
-            {
-                BrokerOptions options = sp.GetRequiredService<IOptions<BrokerOptions>>().Value;
-
-                return Options.Create(options.Message);
-            });
-            
-            services.AddSingleton<MessageOptions>(sp =>
-                sp.GetRequiredService<IOptions<MessageOptions>>().Value);
+            services.RegisterOptionValues<WalOptions, MessageBrokerOptions>(opt => opt.Wal);
+            services.RegisterOptionValues<GarbageCollectorOptions, WalOptions>(opt => opt.GarbageCollector);
+            services.RegisterOptionValues<BrokerOptions, MessageBrokerOptions>(opt => opt.Broker);
+            services.RegisterOptionValues<MessageQueueOptions, BrokerOptions>(opt => opt.Queue);
+            services.RegisterOptionValues<MessageOptions, BrokerOptions>(opt => opt.Message);
         }
 
-        private void AddFilePathCreator(string key)
+        private void AddCoreServices()
         {
-            services.AddKeyedSingleton<IFilePathCreator>(key, (sp, _) =>
+            services.TryAddSingleton(TimeProvider.System);
+        
+            services.AddSingleton<IExpiredMessagePolicy>(sp =>
             {
-                WalOptions walOptions = sp.GetRequiredService<IOptions<WalOptions>>().Value;
-                TimeProvider timeProvider = sp.GetRequiredService<TimeProvider>();
-
-                string prefix = key switch
-                {
-                    EnqueueKey => walOptions.FileNaming.EnqueuePrefix,
-                    AckKey => walOptions.FileNaming.AckPrefix,
-                    DeadKey => walOptions.FileNaming.DeadPrefix,
-                    EnqueueMergedKey => walOptions.FileNaming.EnqueueMergedPrefix,
-                    AckMergedKey => walOptions.FileNaming.AckMergedPrefix,
-                    DeadMergedKey => walOptions.FileNaming.DeadMergedPrefix,
-                    _ => throw new Exception("Unknown binding key.")
-                };
-
-                return new FilePathCreator(
-                    walOptions.Directory, 
-                    prefix,
-                    walOptions.FileNaming.Extension,
-                    timeProvider);
+                BrokerOptions options = sp.GetRequiredService<BrokerOptions>();
+                return new ExpiredMessagePolicy(options.ExpiredPolicy.ExpirationTime, sp.GetRequiredService<TimeProvider>());
             });
         }
 
-        private void AddFileAppenders()
+        private void AddPersistenceServices()
         {
-            services.AddKeyedSingleton(EnqueueKey, CreateAppender<EnqueueWalEvent>);
-            services.AddKeyedSingleton(AckKey, CreateAppender<AckWalEvent>);
-            services.AddKeyedSingleton(DeadKey, CreateAppender<DeadWalEvent>);
-
-            services.AddSingleton<IFileAppender<EnqueueWalEvent>>(sp =>
-                sp.GetRequiredKeyedService<IFileAppender<EnqueueWalEvent>>(EnqueueKey));
+            services.AddSingleton<ICrcProvider, CrcProvider>();
             
-            services.AddSingleton<IFileAppender<AckWalEvent>>(sp =>
-                sp.GetRequiredKeyedService<IFileAppender<AckWalEvent>>(AckKey));
-            
-            services.AddSingleton<IFileAppender<DeadWalEvent>>(sp =>
-                sp.GetRequiredKeyedService<IFileAppender<DeadWalEvent>>(DeadKey));
+            services.AddSingleton<IManifestManager, ManifestManager>();
+            services.AddTransient<IRecoveryService, RecoveryService>();
 
-            services.AddSingleton<IFileAppenderFactory>(sp =>
-            {
-                ICrcProvider crcProvider = sp.GetRequiredService<ICrcProvider>();
-                var enqueuePathCreator = sp.GetRequiredKeyedService<IFilePathCreator>(EnqueueMergedKey);
-                var ackPathCreator = sp.GetRequiredKeyedService<IFilePathCreator>(AckMergedKey);
-                var deadPathCreator = sp.GetRequiredKeyedService<IFilePathCreator>(DeadMergedKey);
+            services.AddSingleton<IMessageQueueFactory, MessageQueueFactory>();
+            services.AddSingleton<IMessageQueue>(sp => sp.GetRequiredService<IRecoveryService>().Recover());
 
-                return new FixedFileAppenderFactory(
-                    crcProvider,
-                    enqueuePathCreator,
-                    ackPathCreator,
-                    deadPathCreator);
-            });
-        }
+            AddPathCreator(services, EnqueueKey, opt => opt.EnqueuePrefix);
+            AddPathCreator(services, AckKey, opt => opt.AckPrefix);
+            AddPathCreator(services, DeadKey, opt => opt.DeadPrefix);
+            AddPathCreator(services, EnqueueMergedKey, opt => opt.EnqueueMergedPrefix);
+            AddPathCreator(services, AckMergedKey, opt => opt.AckMergedPrefix);
+            AddPathCreator(services, DeadMergedKey, opt => opt.DeadMergedPrefix);
 
-        private void AddWriteAheadLog()
-        {
+            services.AddSingleton<IWalReader<EnqueueWalEvent>, EnqueueWalReader>();
+            services.AddSingleton<IWalReader<AckWalEvent>, AckWalReader>();
+            services.AddSingleton<IWalReader<DeadWalEvent>, DeadWalReader>();
+
+            services.AddFileAppender<EnqueueWalEvent, EnqueueFileAppender>(EnqueueKey);
+            services.AddFileAppender<AckWalEvent, AckFileAppender>(AckKey);
+            services.AddFileAppender<DeadWalEvent, DeadFileAppender>(DeadKey);
+        
+            services.AddSingleton<IFileAppenderFactory>(sp => new FixedFileAppenderFactory(
+                sp.GetRequiredService<ICrcProvider>(),
+                sp.GetRequiredKeyedService<IFilePathCreator>(EnqueueMergedKey),
+                sp.GetRequiredKeyedService<IFilePathCreator>(AckMergedKey),
+                sp.GetRequiredKeyedService<IFilePathCreator>(DeadMergedKey)));
+
             services.AddSingleton<WriteAheadLogManager>();
-
             services.AddSingleton<IWriteAheadLog>(sp =>
             {
-                IWriteAheadLog innerWal = sp.GetRequiredService<WriteAheadLogManager>();
-                ICriticalErrorService criticalErrorService = sp.GetRequiredService<ICriticalErrorService>();
-
-                return new CriticalErrorWalDecorator(innerWal, criticalErrorService);
+                IWriteAheadLog inner = sp.GetRequiredService<WriteAheadLogManager>();
+                ICriticalErrorService errorService = sp.GetRequiredService<ICriticalErrorService>();
+                return new CriticalErrorWalDecorator(inner, errorService);
             });
         }
 
-        private void AddBrokerEngine()
+        private void AddBrokerEngineServices()
         {
+            services.AddSingleton<ICriticalErrorService, GracefulShutdownService>();
+            
             services.AddSingleton<BrokerEngine>(sp =>
             {
-                TimeProvider timeProvider = sp.GetRequiredService<TimeProvider>();
-                IMessageQueue messageQueue = sp.GetRequiredService<IMessageQueue>();
-                IWriteAheadLog wal = sp.GetRequiredService<IWriteAheadLog>();
-                IExpiredMessagePolicy expiredPolicy = sp.GetRequiredService<IExpiredMessagePolicy>();
-                BrokerOptions options = sp.GetRequiredService<IOptions<BrokerOptions>>().Value;
-
-                int maxPayloadSize = options.Message.MaxPayloadSize;
-                int maxDeliveryAttempts = options.Message.MaxDeliveryAttempts;
-                
+                BrokerOptions options = sp.GetRequiredService<BrokerOptions>();
                 return new BrokerEngine(
-                    messageQueue,
-                    wal,
-                    expiredPolicy,
-                    timeProvider,
-                    maxPayloadSize,
-                    maxDeliveryAttempts);
+                    sp.GetRequiredService<IMessageQueue>(),
+                    sp.GetRequiredService<IWriteAheadLog>(),
+                    sp.GetRequiredService<IExpiredMessagePolicy>(),
+                    sp.GetRequiredService<TimeProvider>(),
+                    options.Message.MaxPayloadSize,
+                    options.Message.MaxDeliveryAttempts);
             });
 
             services.AddSingleton<IBrokerEngine>(sp =>
             {
-                IBrokerEngine inner = sp.GetRequiredService<BrokerEngine>();
+                BrokerEngine engine = sp.GetRequiredService<BrokerEngine>();
                 var logger = sp.GetRequiredService<ILogger<BrokerEngineLoggingDecorator>>();
-                
-                return new BrokerEngineLoggingDecorator(inner, logger);
+                return new BrokerEngineLoggingDecorator(engine, logger);
             });
 
             services.AddSingleton<IAsyncBrokerEngine, AsyncBrokerEngine>();
+        
+            services.AddSingleton<IRequeueService>(sp => sp.GetRequiredService<BrokerEngine>());
         }
 
-        private void AddRequeueService()
+        private void AddBackgroundServices()
         {
-            services.AddSingleton<IRequeueService>(sp =>
-                sp.GetRequiredService<BrokerEngine>());
-            
+            services.AddSingleton<IWalGarbageCollectorService, WalGarbageCollectorService>();
+        
+            services.AddHostedService<WalGarbageCollectorBackgroundService>();
+        
             services.AddHostedService<RequeueBackgroundService>(sp =>
             {
-                IRequeueService requeueService = sp.GetRequiredService<IRequeueService>();
-                BrokerOptions options = sp.GetRequiredService<IOptions<BrokerOptions>>().Value;
-                TimeProvider timeProvider = sp.GetRequiredService<TimeProvider>();
-                var logger = sp.GetService<ILogger<RequeueBackgroundService>>();
-
-                TimeSpan interval = options.Requeue.RequeueInterval;
-
-                return new RequeueBackgroundService(requeueService, interval, timeProvider, logger);
+                BrokerOptions options = sp.GetRequiredService<BrokerOptions>();
+                return new RequeueBackgroundService(
+                    sp.GetRequiredService<IRequeueService>(),
+                    options.Requeue.RequeueInterval,
+                    sp.GetRequiredService<TimeProvider>(),
+                    sp.GetRequiredService<ILogger<RequeueBackgroundService>>());
             });
         }
 
-        private void AddWalGarbageCollectorService()
+        private void RegisterOptionValues<TTarget, TSource>(Func<TSource, TTarget> selector) 
+            where TTarget : class 
+            where TSource : class
         {
-            services.AddSingleton<IWalGarbageCollectorService, WalGarbageCollectorService>();
+            services.AddSingleton<IOptions<TTarget>>(sp =>
+            {
+                var sourceOptions = sp.GetRequiredService<IOptions<TSource>>().Value;
+                return Options.Create(selector(sourceOptions));
+            });
 
-            services.AddHostedService<WalGarbageCollectorBackgroundService>();
+            services.AddSingleton<TTarget>(sp => sp.GetRequiredService<IOptions<TTarget>>().Value);
         }
     }
-    
-    private static IWalReader<TEvent> CreateReader<TEvent>(IServiceProvider sp) 
-        where TEvent : WalEvent
-    {
-        ICrcProvider crcProvider = sp.GetRequiredService<ICrcProvider>();
 
-        return typeof(TEvent) switch
+    private static void AddPathCreator(IServiceCollection services, string key, Func<FileNamingOptions, string> prefixSelector)
+    {
+        services.AddKeyedSingleton<IFilePathCreator>(key, (sp, _) =>
         {
-            Type t when t == typeof(EnqueueWalEvent) => (IWalReader<TEvent>)new EnqueueWalReader(crcProvider),
-            Type t when t == typeof(AckWalEvent) => (IWalReader<TEvent>)new AckWalReader(crcProvider),
-            Type t when t == typeof(DeadWalEvent) => (IWalReader<TEvent>)new DeadWalReader(crcProvider),
-            _ => throw new Exception("Unknown WalEvent type."),
-        };
+            WalOptions options = sp.GetRequiredService<WalOptions>();
+            return new FilePathCreator(
+                options.Directory,
+                prefixSelector(options.FileNaming),
+                options.FileNaming.Extension,
+                sp.GetRequiredService<TimeProvider>());
+        });
     }
-
-    private static IFileAppender<TEvent> CreateAppender<TEvent>(IServiceProvider sp, object? key)
+    
+    private static void AddFileAppender<TEvent, TImplementation>(this IServiceCollection services, string key)
         where TEvent : WalEvent
+        where TImplementation : class, IFileAppender<TEvent>
     {
-        WalOptions walOptions = sp.GetRequiredService<IOptions<WalOptions>>().Value;
-        ICrcProvider crcProvider = sp.GetRequiredService<ICrcProvider>();
-        IFilePathCreator pathCreator = sp.GetRequiredKeyedService<IFilePathCreator>(key);
-        
-        int maxWrites = walOptions.MaxWriteCountPerFile;
-
-        return typeof(TEvent) switch
+        services.AddKeyedSingleton<IFileAppender<TEvent>>(key, (sp, _) =>
         {
-            Type t when t == typeof(EnqueueWalEvent)
-                => (IFileAppender<TEvent>)new EnqueueFileAppender(crcProvider, pathCreator, maxWrites),
-            
-            Type t when t == typeof(AckWalEvent)
-                => (IFileAppender<TEvent>)new AckFileAppender(crcProvider, pathCreator, maxWrites),
-            
-            Type t when t == typeof(DeadWalEvent)
-                => (IFileAppender<TEvent>)new DeadFileAppender(crcProvider, pathCreator, maxWrites),
-            
-            _ => throw new Exception("Unknown WalEvent type.")
-        };
+            WalOptions options = sp.GetRequiredService<WalOptions>();
+            IFilePathCreator pathCreator = sp.GetRequiredKeyedService<IFilePathCreator>(key);
+            var crc = sp.GetRequiredService<ICrcProvider>();
+
+            return (TImplementation)Activator.CreateInstance(typeof(TImplementation), crc, pathCreator, options.MaxWriteCountPerFile)!;
+        });
+
+        services.AddSingleton<IFileAppender<TEvent>>(sp => 
+            sp.GetRequiredKeyedService<IFileAppender<TEvent>>(key));
     }
 }
