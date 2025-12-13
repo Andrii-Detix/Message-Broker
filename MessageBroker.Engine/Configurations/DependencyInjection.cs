@@ -253,11 +253,12 @@ public static class DependencyInjection
             {
                 IRequeueService requeueService = sp.GetRequiredService<IRequeueService>();
                 BrokerOptions options = sp.GetRequiredService<IOptions<BrokerOptions>>().Value;
+                TimeProvider timeProvider = sp.GetRequiredService<TimeProvider>();
                 var logger = sp.GetService<ILogger<RequeueBackgroundService>>();
 
                 TimeSpan interval = options.Requeue.RequeueInterval;
 
-                return new RequeueBackgroundService(requeueService, interval, logger);
+                return new RequeueBackgroundService(requeueService, interval, timeProvider, logger);
             });
         }
 

@@ -2,6 +2,7 @@
 using MessageBroker.Engine.RequeueServices;
 using MessageBroker.Engine.RequeueServices.Exceptions;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Time.Testing;
 using Moq;
 using Shouldly;
 
@@ -23,10 +24,11 @@ public class RequeueBackgroundServiceTests
     {
         // Arrange
         TimeSpan checkInterval = TimeSpan.FromMicroseconds(150);
+        FakeTimeProvider timeProvider = new();
         ILogger<RequeueBackgroundService> logger = _loggerMock.Object;
         
         // Act
-        Action actual = () => new RequeueBackgroundService(null, checkInterval, logger);
+        Action actual = () => new RequeueBackgroundService(null, checkInterval, timeProvider, logger);
         
         // Assert
         actual.ShouldThrow<ArgumentNullException>();
@@ -40,10 +42,11 @@ public class RequeueBackgroundServiceTests
         // Arrange
         TimeSpan checkInterval = TimeSpan.FromMilliseconds(checkIntervalInMilliseconds);
         IRequeueService requeueService = _requeueServiceMock.Object;
+        FakeTimeProvider timeProvider = new();
         ILogger<RequeueBackgroundService> logger = _loggerMock.Object;
         
         // Act
-        Action actual = () => new RequeueBackgroundService(requeueService, checkInterval, logger);
+        Action actual = () => new RequeueBackgroundService(requeueService, checkInterval, timeProvider, logger);
         
         // Assert
         actual.ShouldThrow<CheckIntervalInvalidException>();
@@ -55,10 +58,11 @@ public class RequeueBackgroundServiceTests
         // Arrange
         TimeSpan checkInterval = TimeSpan.FromMicroseconds(150);
         IRequeueService requeueService = _requeueServiceMock.Object;
+        FakeTimeProvider timeProvider = new();
         ILogger<RequeueBackgroundService> logger = _loggerMock.Object;
         
         // Act
-        RequeueBackgroundService actual = new(requeueService, checkInterval, logger);
+        RequeueBackgroundService actual = new(requeueService, checkInterval, timeProvider, logger);
         
         // Assert
         actual.ShouldNotBeNull();
@@ -70,9 +74,10 @@ public class RequeueBackgroundServiceTests
         // Arrange
         TimeSpan checkInterval = TimeSpan.FromMilliseconds(150);
         IRequeueService requeueService = _requeueServiceMock.Object;
+        FakeTimeProvider timeProvider = new();
         
         // Act
-        RequeueBackgroundService actual = new(requeueService, checkInterval);
+        RequeueBackgroundService actual = new(requeueService, checkInterval, timeProvider);
         
         // Assert
         actual.ShouldNotBeNull();
@@ -80,19 +85,25 @@ public class RequeueBackgroundServiceTests
 
     [Fact]
     public async Task ExecuteAsync_CallsRequeueServicePeriodically_WhenRunning()
-    {
+    { 
         // Arrange
-        TimeSpan checkInterval = TimeSpan.FromMilliseconds(10);
+        TimeSpan checkInterval = TimeSpan.FromSeconds(10);
         IRequeueService requeueService = _requeueServiceMock.Object;
-        using RequeueBackgroundService sut = new(requeueService, checkInterval);
-        
+        FakeTimeProvider timeProvider = new();
+    
+        using RequeueBackgroundService sut = new(requeueService, checkInterval, timeProvider);
+    
         // Act
         await sut.StartAsync(CancellationToken.None);
-        
-        await Task.Delay(TimeSpan.FromSeconds(1));
-        
+
+        for (int i = 0; i < 3; i++)
+        {
+            timeProvider.Advance(TimeSpan.FromSeconds(10.1));
+            await Task.Delay(500);
+        }
+    
         await sut.StopAsync(CancellationToken.None);
-        
+    
         // Assert
         _requeueServiceMock.Verify(r => r.Requeue(), Times.AtLeast(2));
     }
@@ -106,12 +117,17 @@ public class RequeueBackgroundServiceTests
         
         TimeSpan checkInterval = TimeSpan.FromMilliseconds(10);
         IRequeueService requeueService = _requeueServiceMock.Object;
-        using RequeueBackgroundService sut = new(requeueService, checkInterval);
+        FakeTimeProvider timeProvider = new();
+        using RequeueBackgroundService sut = new(requeueService, checkInterval, timeProvider);
         
         // Act
         await sut.StartAsync(CancellationToken.None);
         
-        await Task.Delay(TimeSpan.FromSeconds(1));
+        for (int i = 0; i < 3; i++)
+        {
+            timeProvider.Advance(TimeSpan.FromSeconds(10.1));
+            await Task.Delay(500);
+        }
         
         await sut.StopAsync(CancellationToken.None);
         
