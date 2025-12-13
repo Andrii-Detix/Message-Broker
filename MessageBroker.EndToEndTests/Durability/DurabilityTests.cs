@@ -573,6 +573,13 @@ public class DurabilityTests : IDisposable
 
     public void Dispose()
     {
-        Directory.Delete(_hostDirectory, true);
+        try
+        {
+            Directory.Delete(_hostDirectory, true);
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Cleanup warning: {ex.Message}");
+        }
     }
 }
