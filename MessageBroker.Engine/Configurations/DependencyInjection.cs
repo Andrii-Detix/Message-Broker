@@ -4,6 +4,7 @@ using MessageBroker.Core.ExpiredMessagePolicies;
 using MessageBroker.Core.Queues;
 using MessageBroker.Engine.Abstractions;
 using MessageBroker.Engine.BrokerEngines;
+using MessageBroker.Engine.Decorators.BrokerEngine;
 using MessageBroker.Engine.Decorators.Wal;
 using MessageBroker.Engine.Services.Requeue;
 using MessageBroker.Engine.Services.Shutdown;

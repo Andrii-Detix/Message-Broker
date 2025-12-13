@@ -1,6 +1,7 @@
 ﻿using MessageBroker.Core.Messages.Models;
 using MessageBroker.Engine.Abstractions;
 using MessageBroker.Engine.BrokerEngines;
+using MessageBroker.Engine.Decorators.BrokerEngine;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Time.Testing;
 using Moq;
