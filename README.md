@@ -191,10 +191,9 @@ You can run the Persistent Message Broker in a Docker container. Make sure you h
 
 4. **Run the container with a Data Volume**
     ```bash
-   # Syntax: -v <HOST_PATH_FOR_DATA>:<CONTAINER_PATH_FOR_DATA>
     docker run -d --name message-broker -p 5122:8080 -v /path/to/host/wal:/var/lib/messagebroker/data message-broker:v1
     ```
-   > To ensure data persistence and survivability of the WAL files, you must use a volume or bind mount.
+   > To ensure data persistence and survivability of the WAL files, you must use a volume or bind mount (`-v <HOST_PATH_FOR_DATA>:<CONTAINER_PATH_FOR_DATA>`);
 
 <span id="overriding-configuration"></span>
 ## Overriding Configuration
