@@ -2,7 +2,7 @@
 
 Persistent Message Broker is a reliable message queue written in **C# 14** using **.NET 10**. The project is designed to provide **durable message delivery** and **crash-safe persistence** while supporting concurrent producers and consumers. The system relies on a **Write-Ahead Log (WAL)** mechanism for persistent data storage and state recovery after failures.
 
-## Content Table
+## Table of Contents
 - [Features](#features)
 - [Public HTTP API](#api)
 - [Configuration](#configuration)
