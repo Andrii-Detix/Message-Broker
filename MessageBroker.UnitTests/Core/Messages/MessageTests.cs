@@ -1,5 +1,6 @@
 ﻿using MessageBroker.Core.Messages.Exceptions;
 using MessageBroker.Core.Messages.Models;
+using MessageBroker.UnitTests.Helpers;
 using Microsoft.Extensions.Time.Testing;
 using Shouldly;
 
@@ -17,7 +18,7 @@ public class MessageTests
         FakeTimeProvider timeProvider = new();
         
         // Act
-        Action actual = () => Message.Create(id, payload, maxDeliveryAttempts, timeProvider);
+        Action actual = () => MessageHelper.CreateMessage(id, payload, maxDeliveryAttempts, timeProvider);
 
         // Assert
         actual.ShouldThrow<PayloadNullReferenceException>();
@@ -233,7 +234,7 @@ public class MessageTests
     public void TryEnqueue_TransitionsToEnqueued_WhenMessageIsCreated()
     {
         // Arrange
-        Message sut = CreateSut();
+        Message sut = MessageHelper.CreateMessage();
         
         // Act
         bool actual = sut.TryEnqueue();
@@ -270,7 +271,7 @@ public class MessageTests
     {
         // Arrange
         FakeTimeProvider timeProvider = new();
-        Message sut = CreateSut(maxDeliveryAttempts: 2, timeProvider: timeProvider);
+        Message sut = MessageHelper.CreateMessage(maxDeliveryAttempts: 2, timeProvider: timeProvider);
         
         sut.TryEnqueue();
         sut.TrySend(timeProvider);
@@ -287,7 +288,7 @@ public class MessageTests
     public void TryEnqueue_ReturnsFalse_WhenMessageIsAlreadyEnqueued()
     {
         // Arrange
-        Message sut = CreateSut();
+        Message sut = MessageHelper.CreateMessage();
         
         sut.TryEnqueue();
         
@@ -303,7 +304,7 @@ public class MessageTests
     {
         // Arrange
         FakeTimeProvider timeProvider = new();
-        Message sut = CreateSut(maxDeliveryAttempts: 1, timeProvider: timeProvider);
+        Message sut = MessageHelper.CreateMessage(maxDeliveryAttempts: 1, timeProvider: timeProvider);
         
         sut.TryEnqueue();
         sut.TrySend(timeProvider);
@@ -321,7 +322,7 @@ public class MessageTests
     {
         // Arrange
         FakeTimeProvider timeProvider = new();
-        Message sut = CreateSut(timeProvider: timeProvider);
+        Message sut = MessageHelper.CreateMessage(timeProvider: timeProvider);
         
         sut.TryEnqueue();
         
@@ -340,7 +341,7 @@ public class MessageTests
     public void TrySend_ThrowsException_WhenTimeProviderIsNull()
     {
         // Arrange
-        Message sut = CreateSut();
+        Message sut = MessageHelper.CreateMessage();
         
         // Act
         Action actual = () => sut.TrySend(null!);
@@ -354,7 +355,7 @@ public class MessageTests
     {
         // Arrange
         FakeTimeProvider timeProvider = new();
-        Message sut = CreateSut(timeProvider: timeProvider);
+        Message sut = MessageHelper.CreateMessage(timeProvider: timeProvider);
         
         // Act
         bool actual = sut.TrySend(timeProvider);
@@ -371,7 +372,7 @@ public class MessageTests
     {
         // Arrange
         FakeTimeProvider timeProvider = new();
-        Message sut = CreateSut(timeProvider: timeProvider);
+        Message sut = MessageHelper.CreateMessage(timeProvider: timeProvider);
         
         sut.TryEnqueue();
         sut.TrySend(timeProvider);
@@ -389,7 +390,7 @@ public class MessageTests
     {
         // Arrange
         FakeTimeProvider timeProvider = new();
-        Message sut = CreateSut(timeProvider: timeProvider);
+        Message sut = MessageHelper.CreateMessage(timeProvider: timeProvider);
         
         sut.TryEnqueue();
         
@@ -399,18 +400,5 @@ public class MessageTests
         // Assert
         actual.ShouldBeFalse();
         sut.State.ShouldBe(MessageState.Enqueued);
-    }
-    
-    private Message CreateSut(
-        Guid? messageId = null,
-        byte[]? payload = null,
-        int? maxDeliveryAttempts = null,
-        TimeProvider? timeProvider = null)
-    {
-        return Message.Create(
-            messageId ?? Guid.CreateVersion7(), 
-            payload ?? [], 
-            maxDeliveryAttempts ?? 5, 
-            timeProvider ?? new FakeTimeProvider());
     }
 }
