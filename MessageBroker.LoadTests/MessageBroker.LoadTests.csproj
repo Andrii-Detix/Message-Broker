@@ -5,8 +5,7 @@
         <ImplicitUsings>enable</ImplicitUsings>
         <Nullable>enable</Nullable>
         <IsPackable>false</IsPackable>
-        <IsTestProject Condition="'$(CI)' != 'true'">true</IsTestProject>
-        <IsTestProject Condition="'$(CI)' == 'true'">false</IsTestProject>
+        <IsTestProject>true</IsTestProject>
     </PropertyGroup>
 
     <ItemGroup>

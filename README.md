@@ -287,7 +287,7 @@ docker build -t message-broker:test -f MessageBroker.Api/Dockerfile .
 Run all Unit, Integration, and End-to-End tests, excluding the heavy Load tests.
 
 ```bash
-dotnet test --filter "Category!=Load"
+dotnet test -c Release --filter "Category!=Load"
 ```
 
 ### Load Tests
@@ -297,7 +297,7 @@ Run only the load tests.
 **Note:** These tests are configured to run **sequentially (not in parallel)** to ensure system resources are isolated for accurate metrics.
 
 ```bash
-dotnet test --filter "Category=Load"
+dotnet test -c Release --filter "Category=Load"
 ```
 
 ### Run All Tests
@@ -305,7 +305,7 @@ dotnet test --filter "Category=Load"
 Execute every test in the solution (including Load tests).
 
 ```bash
-dotnet test
+dotnet test -c Release
 ```
 
 ### Run a Specific Project
@@ -313,7 +313,7 @@ dotnet test
 To run tests for a single project only (e.g., just the Unit tests).
 
 ```bash
-dotnet test MessageBroker.UnitTests/MessageBroker.UnitTests.csproj
+dotnet test -c Release MessageBroker.UnitTests/MessageBroker.UnitTests.csproj
 ```
 
 <span id="author"></span>
