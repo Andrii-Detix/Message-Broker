@@ -3,6 +3,11 @@ using System.Text;
 using MessageBroker.EndToEndTests.Abstractions;
 using MessageBroker.EndToEndTests.Extensions;
 using MessageBroker.EndToEndTests.Helpers;
+using MessageBroker.EndToEndTests.Tests.HelperServices;
+using MessageBroker.Persistence.Abstractions;
+using MessageBroker.Persistence.Events;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Hosting;
 using Shouldly;
 
 namespace MessageBroker.EndToEndTests.Tests;
@@ -186,5 +191,44 @@ public class ReliabilityTests(BrokerFactory factory) : BaseFunctionalTest(factor
         }
         
         responses[3].StatusCode.ShouldBe(HttpStatusCode.NoContent);
+    }
+
+    [Fact]
+    public async Task Broker_Shutdowns_WhenWalStorageExceptionOccuredDuringWalEventAppending()
+    {
+        // Arrange
+        TaskCompletionSource<bool> shutdownTriggered = new();
+        TimeSpan waitingInterval = TimeSpan.FromSeconds(5);
+        
+        ConfigureServices(services =>
+        {
+            services.AddKeyedSingleton<IFileAppender<EnqueueWalEvent>>("Enqueue", (_, _) => new BrokenEnqueueFileAppender());
+            
+            services.AddHostedService<ShutdownMonitorService>(sp => 
+                new ShutdownMonitorService(
+                    sp.GetRequiredService<IHostApplicationLifetime>(), 
+                    shutdownTriggered));
+        });
+        
+        string textPayload = "Some payload representation";
+        byte[] payload = Encoding.UTF8.GetBytes(textPayload);
+        using HttpContent content = HttpHelper.CreateHttpContent(payload);
+
+        // Act
+        try
+        {
+            await Client.PostAsync(HttpHelper.PublishUrl, content);
+        }
+        catch (Exception)
+        {
+            // Ignore
+        }
+        
+        // Assert
+        Task<bool> shutdownTask = shutdownTriggered.Task;
+        Task completedTask = await Task.WhenAny(shutdownTask, Task.Delay(waitingInterval));
+
+        completedTask.ShouldBe(shutdownTask);
+        (await shutdownTask).ShouldBeTrue();
     }
 }
