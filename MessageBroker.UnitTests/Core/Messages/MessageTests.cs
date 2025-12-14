@@ -18,7 +18,7 @@ public class MessageTests
         FakeTimeProvider timeProvider = new();
         
         // Act
-        Action actual = () => MessageHelper.CreateMessage(id, payload, maxDeliveryAttempts, timeProvider);
+        Action actual = () => Message.Create(id, payload, maxDeliveryAttempts, timeProvider);
 
         // Assert
         actual.ShouldThrow<PayloadNullReferenceException>();
