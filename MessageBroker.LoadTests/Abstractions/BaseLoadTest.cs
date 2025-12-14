@@ -1,4 +1,5 @@
 ﻿using MessageBroker.EndToEndTests.Abstractions;
+using MessageBroker.LoadTests.Attributes;
 using MessageBroker.LoadTests.Scenarios;
 using NBomber.Contracts;
 using NBomber.Contracts.Stats;
@@ -8,6 +9,8 @@ using Xunit.Abstractions;
 
 namespace MessageBroker.LoadTests.Abstractions;
 
+[LoadTest]
+[Collection("LoadTests Sequence")]
 public abstract class BaseLoadTest(BrokerFactory factory, ITestOutputHelper output)
     : BaseFunctionalTest(factory)
 {
