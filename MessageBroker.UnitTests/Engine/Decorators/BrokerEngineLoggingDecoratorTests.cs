@@ -6,7 +6,7 @@ using Microsoft.Extensions.Time.Testing;
 using Moq;
 using Shouldly;
 
-namespace MessageBroker.UnitTests.Engine.BrokerEngines;
+namespace MessageBroker.UnitTests.Engine.Decorators;
 
 public class BrokerEngineLoggingDecoratorTests
 {
