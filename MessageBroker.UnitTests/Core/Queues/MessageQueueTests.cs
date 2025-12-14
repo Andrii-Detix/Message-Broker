@@ -3,6 +3,7 @@ using MessageBroker.Core.Abstractions;
 using MessageBroker.Core.Messages.Models;
 using MessageBroker.Core.Queues;
 using MessageBroker.Core.Queues.Exceptions;
+using MessageBroker.UnitTests.Helpers;
 using Microsoft.Extensions.Time.Testing;
 using Moq;
 using Shouldly;
@@ -52,9 +53,8 @@ public class MessageQueueTests
     public void TryEnqueue_AddsMessageToQueue_WhenMessageIsNewAndUnique()
     {
         // Arrange
-        FakeTimeProvider timeProvider = new FakeTimeProvider();
-        Message message = Message.Create(Guid.CreateVersion7(), [], 1, timeProvider);
-        MessageQueue sut = new(1, timeProvider);
+        Message message = MessageHelper.CreateMessage();
+        MessageQueue sut = CreateSut();
         
         // Act
         bool actual = sut.TryEnqueue(message);
@@ -69,10 +69,11 @@ public class MessageQueueTests
     {
         // Arrange
         Guid id = Guid.CreateVersion7();
-        FakeTimeProvider timeProvider = new FakeTimeProvider();
-        Message message1 = Message.Create(id, [], 1, timeProvider);
-        Message message2 = Message.Create(id, [], 1, timeProvider);
-        MessageQueue sut = new(1, timeProvider);
+        Message message1 = MessageHelper.CreateMessage(messageId: id, payload: []);
+        Message message2 = MessageHelper.CreateMessage(messageId: id, payload: [0x01]);
+        
+        MessageQueue sut = CreateSut();
+        
         sut.TryEnqueue(message1);
         
         // Act
@@ -88,11 +89,13 @@ public class MessageQueueTests
     {
         // Arrange
         FakeTimeProvider timeProvider = new FakeTimeProvider();
-        Message message = Message.Create(Guid.CreateVersion7(), [], 1, timeProvider);
+        Message message = MessageHelper.CreateMessage(timeProvider: timeProvider);
+        
         message.TryEnqueue();
         message.TrySend(timeProvider);
         message.TryMarkDelivered();
-        MessageQueue sut = new(1, timeProvider);
+
+        MessageQueue sut = CreateSut();
         
         // Act
         bool actual = sut.TryEnqueue(message);
@@ -108,12 +111,16 @@ public class MessageQueueTests
         // Arrange
         Guid id = Guid.CreateVersion7();
         FakeTimeProvider timeProvider = new FakeTimeProvider();
-        Message deliveredMessage = Message.Create(id, [], 1, timeProvider);
+        Message deliveredMessage = MessageHelper.CreateMessage(messageId: id);
+        
         deliveredMessage.TryEnqueue();
         deliveredMessage.TrySend(timeProvider);
         deliveredMessage.TryMarkDelivered();
-        Message createdMessage = Message.Create(id, [], 1, timeProvider);
-        MessageQueue sut = new(1, timeProvider);
+        
+        Message createdMessage = MessageHelper.CreateMessage(messageId: id);
+        
+        MessageQueue sut = CreateSut();
+        
         sut.TryEnqueue(deliveredMessage);
         
         // Act
@@ -129,13 +136,15 @@ public class MessageQueueTests
     {
         // Arrange
         Guid id = Guid.CreateVersion7();
-        FakeTimeProvider timeProvider = new FakeTimeProvider();
-        Message message1 = Message.Create(id, [], 1, timeProvider);
-        MessageQueue sut = new(1, timeProvider);
+        Message message1 = MessageHelper.CreateMessage(messageId: id);
+        
+        MessageQueue sut = CreateSut();
+        
         sut.TryEnqueue(message1);
         sut.TryConsume(out _);
         sut.Ack(id);
-        Message message2 = Message.Create(id, [], 1, timeProvider);
+        
+        Message message2 = MessageHelper.CreateMessage(messageId: id);
         
         // Act
         bool actual = sut.TryEnqueue(message2);
@@ -150,14 +159,10 @@ public class MessageQueueTests
     public void TryEnqueue_AddsAllMessages_WhenTryEnqueueMessagesConcurrently()
     {
         // Arrange
-        FakeTimeProvider timeProvider = new FakeTimeProvider();
-        MessageQueue sut = new(1, timeProvider);
-        int messageCount = 10000;
+        MessageQueue sut = CreateSut();
         
-        Message[] messages = Enumerable
-            .Range(0, messageCount)
-            .Select(_ => Message.Create(Guid.CreateVersion7(), [], 1, timeProvider))
-            .ToArray();
+        int messageCount = 10000;
+        Message[] messages = MessageHelper.CreateMessages(messageCount);
         
         // Act
         Parallel.ForEach(messages, message =>
@@ -173,15 +178,11 @@ public class MessageQueueTests
     public void TryEnqueue_AddsOnlyUniqueMessage_WhenTryEnqueueMessagesConcurrentlyWithSameId()
     {
         // Arrange
-        Guid id = Guid.CreateVersion7();
-        FakeTimeProvider timeProvider = new FakeTimeProvider();
-        MessageQueue sut = new(1, timeProvider);
-        int uniqueMessageCount = 10000;
+        MessageQueue sut = CreateSut();
         
-        Message[] messages = Enumerable
-            .Range(0, uniqueMessageCount)
-            .Select(_ => Message.Create(id, [], 1, timeProvider))
-            .ToArray();
+        Guid id = Guid.CreateVersion7();
+        int uniqueMessageCount = 10000;
+        Message[] messages = MessageHelper.CreateMessages(uniqueMessageCount, fixedId: id);
         
         messages = messages.Concat(messages).ToArray();
         
@@ -199,9 +200,10 @@ public class MessageQueueTests
     public void TryEnqueue_RequeueExpiredMessage_WhenMessageDoesNotReachMaxDeliveryAttempts()
     {
         // Arrange 
-        FakeTimeProvider timeProvider = new FakeTimeProvider();
-        Message message = Message.Create(Guid.CreateVersion7(), [], 2, timeProvider);
-        MessageQueue sut = new(1, timeProvider);
+        Message message = MessageHelper.CreateMessage(maxDeliveryAttempts: 2);
+        
+        MessageQueue sut = CreateSut();
+        
         sut.TryEnqueue(message);
         sut.TryConsume(out _);
         
@@ -224,9 +226,10 @@ public class MessageQueueTests
     public void TryEnqueue_TransitionsMessageToFailed_WhenExpiredMessageReachesMaxDeliveryAttempts()
     {
         // Arrange 
-        FakeTimeProvider timeProvider = new FakeTimeProvider();
-        Message message = Message.Create(Guid.CreateVersion7(), [], 1, timeProvider);
-        MessageQueue sut = new(1, timeProvider);
+        Message message = MessageHelper.CreateMessage(maxDeliveryAttempts: 1);
+        
+        MessageQueue sut = CreateSut();
+        
         sut.TryEnqueue(message);
         sut.TryConsume(out _);
         
@@ -249,8 +252,7 @@ public class MessageQueueTests
     public void TryConsume_ReturnsFalse_WhenQueueIsEmpty()
     {
         // Arrange
-        FakeTimeProvider timeProvider = new FakeTimeProvider();
-        MessageQueue sut = new(1, timeProvider);
+        MessageQueue sut = CreateSut();
         
         // Act
         bool success = sut.TryConsume(out Message? actual);
@@ -265,9 +267,10 @@ public class MessageQueueTests
     public void TryConsume_ReturnsMessage_WhenQueueIsNotEmpty()
     {
         // Arrange
-        FakeTimeProvider timeProvider = new FakeTimeProvider();
-        Message message = Message.Create(Guid.CreateVersion7(), [], 1, timeProvider);
-        MessageQueue sut = new(1, timeProvider);
+        Message message = MessageHelper.CreateMessage();
+        
+        MessageQueue sut = CreateSut();
+        
         sut.TryEnqueue(message);
         
         // Act
@@ -284,9 +287,10 @@ public class MessageQueueTests
     public void TryConsume_TransitionsMessageStateToSent_WhenMessageIsConsumed()
     {
         // Arrange
-        FakeTimeProvider timeProvider = new FakeTimeProvider();
-        Message message = Message.Create(Guid.CreateVersion7(), [], 1, timeProvider);
-        MessageQueue sut = new(1, timeProvider);
+        Message message = MessageHelper.CreateMessage();
+        
+        MessageQueue sut = CreateSut();
+        
         sut.TryEnqueue(message);
         
         // Act
@@ -302,10 +306,11 @@ public class MessageQueueTests
     public void TryConsume_ReturnsMessageInEnqueueOrder_WhenQueueHasMoreThanOneMessages()
     {
         // Arrange
-        FakeTimeProvider timeProvider = new FakeTimeProvider();
-        Message message1 = Message.Create(Guid.CreateVersion7(), [], 1, timeProvider);
-        Message message2 = Message.Create(Guid.CreateVersion7(), [], 1, timeProvider);
-        MessageQueue sut = new(1, timeProvider);
+        Message message1 = MessageHelper.CreateMessage();
+        Message message2 = MessageHelper.CreateMessage();
+        
+        MessageQueue sut = CreateSut();
+        
         sut.TryEnqueue(message1);
         sut.TryEnqueue(message2);
         
@@ -325,13 +330,9 @@ public class MessageQueueTests
     public void TryConsume_ReturnsMessagesInEnqueueOrderForEachThread_WhenTryConsumeMessagesConcurrently()
     {
         // Arrange
-        FakeTimeProvider timeProvider = new FakeTimeProvider();
-        MessageQueue sut = new(100, timeProvider);
+        Message[] messages = MessageHelper.CreateMessages(10000);
         
-        Message[] messages = Enumerable
-            .Range(0, 10000)
-            .Select(_ => Message.Create(Guid.CreateVersion7(), [], 1, timeProvider))
-            .ToArray();
+        MessageQueue sut = CreateSut();
         
         Array.ForEach(messages, message => sut.TryEnqueue(message));
 
@@ -350,6 +351,7 @@ public class MessageQueueTests
         // Assert
         sut.Count.ShouldBe(0);
         threadMessages.Sum(tm => tm.Count).ShouldBe(10000);
+        
         foreach (var actual in threadMessages)
         {
             int[] messageIndexes = actual
@@ -365,9 +367,10 @@ public class MessageQueueTests
     public void Ack_ReturnsMessage_WhenMessageIsSent()
     {
         // Arrange
-        FakeTimeProvider timeProvider = new FakeTimeProvider();
-        Message message = Message.Create(Guid.CreateVersion7(), [], 1, timeProvider);
-        MessageQueue sut = new(1, timeProvider);
+        Message message = MessageHelper.CreateMessage();
+        
+        MessageQueue sut = CreateSut();
+        
         sut.TryEnqueue(message);
         sut.TryConsume(out _);
         
@@ -383,9 +386,10 @@ public class MessageQueueTests
     public void Ack_TransitionsMessageStateToDelivered_WhenMessageIsAcknowledged()
     {
         // Arrange
-        FakeTimeProvider timeProvider = new FakeTimeProvider();
-        Message message = Message.Create(Guid.CreateVersion7(), [], 1, timeProvider);
-        MessageQueue sut = new(1, timeProvider);
+        Message message = MessageHelper.CreateMessage();
+        
+        MessageQueue sut = CreateSut();
+        
         sut.TryEnqueue(message);
         sut.TryConsume(out _);
         
@@ -401,9 +405,10 @@ public class MessageQueueTests
     public void Ack_ReturnsNull_WhenMessageIsNotSent()
     {
         // Arrange
-        FakeTimeProvider timeProvider = new FakeTimeProvider();
-        Message message = Message.Create(Guid.CreateVersion7(), [], 1, timeProvider);
-        MessageQueue sut = new(1, timeProvider);
+        Message message = MessageHelper.CreateMessage();
+        
+        MessageQueue sut = CreateSut();
+        
         sut.TryEnqueue(message);
         
         // Act
@@ -417,8 +422,7 @@ public class MessageQueueTests
     public void Ack_ReturnsNull_WhenMessageDoesNotContainMessageWithId()
     {
         // Arrange
-        FakeTimeProvider timeProvider = new FakeTimeProvider();
-        MessageQueue sut = new(1, timeProvider);
+        MessageQueue sut = CreateSut();
         
         // Act
         Message? actual = sut.Ack(Guid.CreateVersion7());
@@ -431,9 +435,10 @@ public class MessageQueueTests
     public void Ack_ReturnsNull_WhenMessageIsAlreadyAcknowledged()
     {
         // Arrange
-        FakeTimeProvider timeProvider = new FakeTimeProvider();
-        Message message = Message.Create(Guid.CreateVersion7(), [], 1, timeProvider);
-        MessageQueue sut = new(1, timeProvider);
+        Message message = MessageHelper.CreateMessage();
+        
+        MessageQueue sut = CreateSut();
+        
         sut.TryEnqueue(message);
         sut.TryConsume(out _);
         sut.Ack(message.Id);
@@ -449,11 +454,13 @@ public class MessageQueueTests
     public void Ack_AcknowledgesMessageOnlyOnce_WhenTryAcknowledgeSameMessageConcurrently()
     {
         // Arrange
-        FakeTimeProvider timeProvider = new FakeTimeProvider();
-        Message message = Message.Create(Guid.CreateVersion7(), [], 1, timeProvider);
-        MessageQueue sut = new(1, timeProvider);
+        Message message = MessageHelper.CreateMessage();
+        
+        MessageQueue sut = CreateSut();
+        
         sut.TryEnqueue(message);
         sut.TryConsume(out _);
+        
         ConcurrentBag<Message?> results = [];
         
         // Act
@@ -472,12 +479,9 @@ public class MessageQueueTests
     public void TakeExpiredMessages_ReturnsEmptyIEnumerable_WhenAllMessagesAreNotSent()
     {
         // Arrange
-        FakeTimeProvider timeProvider = new FakeTimeProvider();
-        MessageQueue sut = new(1, timeProvider);
+        Message[] messages = MessageHelper.CreateMessages(100);
         
-        Message[] messages = Enumerable.Range(0, 100)
-            .Select(_ => Message.Create(Guid.CreateVersion7(), [], 1, timeProvider))
-            .ToArray();
+        MessageQueue sut = CreateSut();
         
         Array.ForEach(messages, message => sut.TryEnqueue(message));
         
@@ -497,12 +501,9 @@ public class MessageQueueTests
     public void TakeExpiredMessages_ReturnsEmptyIEnumerable_WhenAllMessagesAreNotExpired()
     {
         // Arrange
-        FakeTimeProvider timeProvider = new FakeTimeProvider();
-        MessageQueue sut = new(1, timeProvider);
+        MessageQueue sut = CreateSut();
 
-        Message[] messages = Enumerable.Range(0, 100)
-            .Select(_ => Message.Create(Guid.CreateVersion7(), [], 1, timeProvider))
-            .ToArray();
+        Message[] messages = MessageHelper.CreateMessages(100);
         
         foreach (Message message in messages)
         {
@@ -526,17 +527,16 @@ public class MessageQueueTests
     public void TakeExpiredMessages_ReturnsOnlyExpiredMessages_WhenQueueContainsMixedMessages()
     {
         // Arrange
-        FakeTimeProvider timeProvider = new FakeTimeProvider();
-        MessageQueue sut = new(1, timeProvider);
+        MessageQueue sut = CreateSut();
         
         Guid[] expiredIds = [Guid.CreateVersion7(), Guid.CreateVersion7()];
 
         Message[] messages = 
         [
-            Message.Create(Guid.CreateVersion7(), [], 1, timeProvider),
-            Message.Create(expiredIds[0], [], 1, timeProvider),
-            Message.Create(expiredIds[1], [], 1, timeProvider),
-            Message.Create(Guid.CreateVersion7(), [], 1, timeProvider),
+            MessageHelper.CreateMessage(),
+            MessageHelper.CreateMessage(messageId: expiredIds[0]),
+            MessageHelper.CreateMessage(messageId: expiredIds[1]),
+            MessageHelper.CreateMessage()
         ];
         
         foreach (var message in messages)
@@ -557,5 +557,14 @@ public class MessageQueueTests
         actual.ShouldNotBeEmpty();
         actual.Count().ShouldBe(2);
         actual.Select(m => m.Id).ShouldBe(expiredIds, ignoreOrder: true);
+    }
+
+    private static MessageQueue CreateSut(
+        int? maxSwapCount = null,
+        TimeProvider? timeProvider = null)
+    {
+        return new MessageQueue(
+            maxSwapCount ?? 5,
+            timeProvider ?? new FakeTimeProvider());
     }
 }
