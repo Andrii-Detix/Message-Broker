@@ -11,10 +11,14 @@ namespace MessageBroker.IntegrationTests.Persistence.FileAppenders;
 
 public class AbstractFileAppenderTests : IDisposable
 {
+    private readonly CrcProvider _crcProvider;
+    private readonly FakeTimeProvider _timeProvider;
     private readonly string _directory;
 
     public AbstractFileAppenderTests()
     {
+        _crcProvider = new();
+        _timeProvider = new();
         _directory = Path.Combine(Path.GetTempPath(), Path.GetRandomFileName());
     }
 
@@ -22,8 +26,7 @@ public class AbstractFileAppenderTests : IDisposable
     public void Constructor_ThrowsException_WhenCrcProviderIsNull()
     {
         // Arrange
-        FakeTimeProvider timeProvider = new();
-        IFilePathCreator pathCreator = new FilePathCreator(_directory, "prefix", "ext", timeProvider);
+        IFilePathCreator pathCreator = CreateFilePathCreator();
         int maxWriteCountPerFile = 1;
         
         // Act
@@ -53,9 +56,8 @@ public class AbstractFileAppenderTests : IDisposable
     public void Constructor_ThrowsException_WhenMaxWriteCountPerFileIsLessThanOne(int maxWriteCountPerFile)
     {
         // Arrange
-        FakeTimeProvider timeProvider = new();
         ICrcProvider crcProvider = new CrcProvider();
-        IFilePathCreator pathCreator = new FilePathCreator(_directory, "prefix", "ext", timeProvider);
+        IFilePathCreator pathCreator = CreateFilePathCreator();
         
         // Act
         Action actual = () => new TestFileAppender(crcProvider, pathCreator, maxWriteCountPerFile);
@@ -68,9 +70,8 @@ public class AbstractFileAppenderTests : IDisposable
     public void Constructor_CreatesFileAppender_WhenInputDataIsValid()
     {
         // Arrange
-        FakeTimeProvider timeProvider = new();
         ICrcProvider crcProvider = new CrcProvider();
-        IFilePathCreator pathCreator = new FilePathCreator(_directory, "prefix", "ext", timeProvider);
+        IFilePathCreator pathCreator = CreateFilePathCreator();
 
         // Act
         using TestFileAppender actual = new(crcProvider, pathCreator, 1);
@@ -83,9 +84,8 @@ public class AbstractFileAppenderTests : IDisposable
     public void Constructor_CreatesFileForStoringData_WhenInputDataIsValid()
     {
         // Arrange
-        FakeTimeProvider timeProvider = new();
         ICrcProvider crcProvider = new CrcProvider();
-        IFilePathCreator pathCreator = new FilePathCreator(_directory, "prefix", "ext", timeProvider);
+        IFilePathCreator pathCreator = CreateFilePathCreator();
 
         // Act
         TestFileAppender actual = new(crcProvider, pathCreator, 1);
@@ -102,10 +102,9 @@ public class AbstractFileAppenderTests : IDisposable
     public void Constructor_CreatesDirectory_WhenDirectoryDoesNotExist()
     {
         // Arrange
-        FakeTimeProvider timeProvider = new();
         string dir = Path.Combine(_directory, Path.GetRandomFileName());
         ICrcProvider crcProvider = new CrcProvider();
-        IFilePathCreator pathCreator = new FilePathCreator(dir, "prefix", "ext", timeProvider);
+        IFilePathCreator pathCreator = CreateFilePathCreator(directory: dir);
 
         // Act
         using TestFileAppender actual = new(crcProvider, pathCreator, 1);
@@ -118,14 +117,11 @@ public class AbstractFileAppenderTests : IDisposable
     public void SaveData_WritesDataToFile_WhenInputDataIsNotEmpty()
     {
         // Arrange
-        FakeTimeProvider timeProvider = new();
-        ICrcProvider crcProvider = new CrcProvider();
-        IFilePathCreator pathCreator = new FilePathCreator(_directory, "prefix", "ext", timeProvider);
-        TestFileAppender sut = new(crcProvider, pathCreator, 3);
+        TestFileAppender sut = CreateSut();
 
         byte[] data = [0x01, 0x02];
         byte[] header = new byte[8];
-        crcProvider.WriteHeader(header, data);
+        _crcProvider.WriteHeader(header, data);
         int expectedSize = 8 + 2; // Header (8) + Data (2) = 10
         
         // Act
@@ -150,18 +146,15 @@ public class AbstractFileAppenderTests : IDisposable
     public void SaveData_AppendsDataToTheEndOfFile_WhenSomeDataIsAlreadyWritten()
     {
         // Arrange
-        FakeTimeProvider timeProvider = new();
-        ICrcProvider crcProvider = new CrcProvider();
-        IFilePathCreator pathCreator = new FilePathCreator(_directory, "prefix", "ext", timeProvider);
-        TestFileAppender sut = new(crcProvider, pathCreator, 3);
+        TestFileAppender sut = CreateSut();
         
         byte[] data1 = [0x01, 0x02];
         byte[] header1 = new byte[8];
-        crcProvider.WriteHeader(header1, data1);
+        _crcProvider.WriteHeader(header1, data1);
         
         byte[] data2 = [0x01, 0x03];
         byte[] header2 = new byte[8];
-        crcProvider.WriteHeader(header2, data2);
+        _crcProvider.WriteHeader(header2, data2);
         
         byte[] expectedBuffer = header1.Concat(data1).Concat(header2).Concat(data2).ToArray();
         int expectedSize = 8 + 2 + 8 + 2; // Header (8) + Data (2) + Header (8) + Data (2) = 20
@@ -185,14 +178,11 @@ public class AbstractFileAppenderTests : IDisposable
     public void SaveData_RotatesFileAndSaveDataIntoIt_WhenMaxWriteCountPerFileWasReached()
     {
         // Arrange
-        FakeTimeProvider timeProvider = new();
-        ICrcProvider crcProvider = new CrcProvider();
-        IFilePathCreator pathCreator = new FilePathCreator(_directory, "prefix", "ext", timeProvider);
-        TestFileAppender sut = new(crcProvider, pathCreator, 1);
+        TestFileAppender sut = CreateSut(maxWriteCountPerFile: 1);
         
         byte[] data = [0x01, 0x03];
         byte[] header = new byte[8];
-        crcProvider.WriteHeader(header, data);
+        _crcProvider.WriteHeader(header, data);
 
         byte[] expectedBuffer = header.Concat(data).ToArray();
         int expectedSize = 8 + 2; // Header (8) + Data (2) = 10
@@ -218,14 +208,11 @@ public class AbstractFileAppenderTests : IDisposable
     public void SaveData_StoresAllData_WhenWritesDataConcurrently()
     {
         // Arrange
-        FakeTimeProvider timeProvider = new();
-        ICrcProvider crcProvider = new CrcProvider();
-        IFilePathCreator pathCreator = new FilePathCreator(_directory, "prefix", "ext", timeProvider);
-        TestFileAppender sut = new(crcProvider, pathCreator, 100000);
+        TestFileAppender sut = CreateSut();
 
         byte[] data = [0x01, 0x02];
         byte[] header = new byte[8];
-        crcProvider.WriteHeader(header, data);
+        _crcProvider.WriteHeader(header, data);
         int writeSize = 8 + 2; // Header (8) + Data (2) = 10
         byte[] expectedBuffer = header.Concat(data).ToArray();
         
@@ -260,10 +247,7 @@ public class AbstractFileAppenderTests : IDisposable
     public void SaveData_HandlesFileRotation_WhenWritesDataConcurrently()
     {
         // Arrange
-        FakeTimeProvider timeProvider = new();
-        ICrcProvider crcProvider = new CrcProvider();
-        IFilePathCreator pathCreator = new FilePathCreator(_directory, "prefix", "ext", timeProvider);
-        TestFileAppender sut = new(crcProvider, pathCreator, 1000);
+        TestFileAppender sut = CreateSut(maxWriteCountPerFile: 1000);
 
         byte[] data = [0x01, 0x02];
         int writeSize = 8 + 2; // Header (8) + Data (2) = 10
@@ -297,10 +281,7 @@ public class AbstractFileAppenderTests : IDisposable
     public void SaveData_ThrowsException_WhenFileAppenderIsDisposed()
     {
         // Arrange
-        FakeTimeProvider timeProvider = new();
-        ICrcProvider crcProvider = new CrcProvider();
-        IFilePathCreator pathCreator = new FilePathCreator(_directory, "prefix", "ext", timeProvider);
-        TestFileAppender sut = new(crcProvider, pathCreator, 3);
+        TestFileAppender sut = CreateSut();
         sut.Dispose();
         
         // Act
@@ -314,7 +295,6 @@ public class AbstractFileAppenderTests : IDisposable
     public void SaveData_RetriesAndSucceeds_WhenFirstRotationFails()
     {
         // Arrange
-        CrcProvider crcProvider = new();
         Mock<IFilePathCreator> pathCreatorMock = new();
 
         string initialFile = Path.Combine(_directory, "start.log");
@@ -326,7 +306,7 @@ public class AbstractFileAppenderTests : IDisposable
             .Returns(badPath)
             .Returns(recoveryFile);
         
-        TestFileAppender sut = new(crcProvider, pathCreatorMock.Object, 1);
+        TestFileAppender sut = CreateSut(pathCreatorMock.Object, 1);
     
         sut.WriteRawBytes([0xAA]); 
 
@@ -347,7 +327,6 @@ public class AbstractFileAppenderTests : IDisposable
     public void SaveData_DisposesAppenderAndThrowsException_WhenRetryAlsoFails()
     {
         // Arrange
-        CrcProvider crcProvider = new();
         Mock<IFilePathCreator> pathCreatorMock = new();
 
         string initialFile = Path.Combine(_directory, "start.log");
@@ -359,7 +338,7 @@ public class AbstractFileAppenderTests : IDisposable
             .Returns(badPath1)
             .Returns(badPath2);
         
-        TestFileAppender sut = new(crcProvider, pathCreatorMock.Object, 1);
+        TestFileAppender sut = CreateSut(pathCreatorMock.Object, 1);
         sut.WriteRawBytes([0xAA]);
 
         // Act
@@ -375,16 +354,30 @@ public class AbstractFileAppenderTests : IDisposable
     public void Dispose_SetCurrentFileAsEmpty()
     {
         // Arrange
-        FakeTimeProvider timeProvider = new();
-        ICrcProvider crcProvider = new CrcProvider();
-        IFilePathCreator pathCreator = new FilePathCreator(_directory, "prefix", "ext", timeProvider);
-        TestFileAppender sut = new(crcProvider, pathCreator, 3);
+        TestFileAppender sut = CreateSut();
         
         // Act
         sut.Dispose();
         
         // Assert
         sut.CurrentFile.ShouldBeEmpty();
+    }
+
+    private IFilePathCreator CreateFilePathCreator(string? directory = null, string? prefix = null, string? ext = null)
+    {
+        return new FilePathCreator(
+            directory ?? _directory,
+            prefix ?? "prefix",
+            ext ?? "ext",
+            _timeProvider);
+    }
+
+    private TestFileAppender CreateSut(IFilePathCreator? pathCreator = null ,int maxWriteCountPerFile = 100000)
+    {
+        return new(
+            _crcProvider, 
+            pathCreator ?? CreateFilePathCreator(), 
+            maxWriteCountPerFile);
     }
     
     public void Dispose()

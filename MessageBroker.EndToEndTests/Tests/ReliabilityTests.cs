@@ -2,6 +2,12 @@
 using System.Text;
 using MessageBroker.EndToEndTests.Abstractions;
 using MessageBroker.EndToEndTests.Extensions;
+using MessageBroker.EndToEndTests.Helpers;
+using MessageBroker.EndToEndTests.Tests.HelperServices;
+using MessageBroker.Persistence.Abstractions;
+using MessageBroker.Persistence.Events;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Hosting;
 using Shouldly;
 
 namespace MessageBroker.EndToEndTests.Tests;
@@ -18,14 +24,14 @@ public class ReliabilityTests(BrokerFactory factory) : BaseFunctionalTest(factor
             { "MessageBroker:Broker:ExpiredPolicy:ExpirationTime", "00:01:00"}
         });
         
-        using HttpContent content = CreateHttpContent([]);
+        using HttpContent content = HttpHelper.CreateHttpContent([]);
         
-        await Client.PostAsync(PublishUrl, content);
+        await Client.PostAsync(HttpHelper.PublishUrl, content);
         
-        HttpResponseMessage consumeResponse = await Client.GetAsync(ConsumeUrl);
-        string messageId = consumeResponse.ShouldHaveHeader("X-Message-Id")!;
+        HttpResponseMessage consumeResponse = await Client.GetAsync(HttpHelper.ConsumeUrl);
+        string messageId = consumeResponse.ShouldHaveHeader(HttpHelper.MessageIdHeaderName)!;
         
-        string ackUrl = $"{AckUrl}/{messageId}";
+        string ackUrl = HttpHelper.AckUrl(messageId);
         
         await Client.PostAsync(ackUrl, null);
         
@@ -46,17 +52,17 @@ public class ReliabilityTests(BrokerFactory factory) : BaseFunctionalTest(factor
             { "MessageBroker:Broker:ExpiredPolicy:ExpirationTime", "00:00:00.010"}
         });
         
-        using HttpContent content = CreateHttpContent([]);
+        using HttpContent content = HttpHelper.CreateHttpContent([]);
         
-        await Client.PostAsync(PublishUrl, content);
+        await Client.PostAsync(HttpHelper.PublishUrl, content);
         
-        HttpResponseMessage consumeResponse = await Client.GetAsync(ConsumeUrl);
-        string messageId = consumeResponse.ShouldHaveHeader("X-Message-Id")!;
+        HttpResponseMessage consumeResponse = await Client.GetAsync(HttpHelper.ConsumeUrl);
+        string messageId = consumeResponse.ShouldHaveHeader(HttpHelper.MessageIdHeaderName)!;
         
         await Task.Delay(TimeSpan.FromMilliseconds(500));
         
         // Act
-        HttpResponseMessage actual = await Client.PostAsync($"{AckUrl}/{messageId}", null);
+        HttpResponseMessage actual = await Client.PostAsync(HttpHelper.AckUrl(messageId), null);
         
         // Assert
         actual.StatusCode.ShouldBe(HttpStatusCode.NotFound);
@@ -75,16 +81,16 @@ public class ReliabilityTests(BrokerFactory factory) : BaseFunctionalTest(factor
         string payloadText = "Some payload representation";
         byte[] payload = Encoding.UTF8.GetBytes(payloadText);
         
-        using HttpContent content = CreateHttpContent(payload);
+        using HttpContent content = HttpHelper.CreateHttpContent(payload);
         
-        await Client.PostAsync(PublishUrl, content);
+        await Client.PostAsync(HttpHelper.PublishUrl, content);
         
-        HttpResponseMessage response1 = await Client.GetAsync(ConsumeUrl);
+        HttpResponseMessage response1 = await Client.GetAsync(HttpHelper.ConsumeUrl);
         
         await Task.Delay(TimeSpan.FromMilliseconds(500));
         
         // Act
-        HttpResponseMessage response2 = await Client.GetAsync(ConsumeUrl);
+        HttpResponseMessage response2 = await Client.GetAsync(HttpHelper.ConsumeUrl);
         
         // Assert
         response2.StatusCode.ShouldBe(HttpStatusCode.OK);
@@ -93,10 +99,10 @@ public class ReliabilityTests(BrokerFactory factory) : BaseFunctionalTest(factor
         actualText.ShouldNotBeNullOrEmpty();
         actualText.ShouldBe(payloadText);
 
-        string id = response2.ShouldHaveHeader("X-Message-Id")!;
-        id.ShouldBe(response1.ShouldHaveHeader("X-Message-Id"));
+        string id = response2.ShouldHaveHeader(HttpHelper.MessageIdHeaderName)!;
+        id.ShouldBe(response1.ShouldHaveHeader(HttpHelper.MessageIdHeaderName));
         
-        response2.ShouldHaveHeader("X-Delivery-Attempts", 2.ToString());
+        response2.ShouldHaveHeader(HttpHelper.DeliveryAttemptHeaderName, 2.ToString());
     }
 
     [Fact]
@@ -115,11 +121,11 @@ public class ReliabilityTests(BrokerFactory factory) : BaseFunctionalTest(factor
         foreach (string message in messages)
         {
             byte[] payload = Encoding.UTF8.GetBytes(message);
-            using HttpContent content = CreateHttpContent(payload);
-            await Client.PostAsync(PublishUrl, content);
+            using HttpContent content = HttpHelper.CreateHttpContent(payload);
+            await Client.PostAsync(HttpHelper.PublishUrl, content);
         }
         
-        await Client.GetAsync(ConsumeUrl);
+        await Client.GetAsync(HttpHelper.ConsumeUrl);
         
         await Task.Delay(TimeSpan.FromMilliseconds(500));
         
@@ -128,7 +134,7 @@ public class ReliabilityTests(BrokerFactory factory) : BaseFunctionalTest(factor
         // Act
         for (int i = 0; i < 3; i++)
         {
-            HttpResponseMessage actual = await Client.GetAsync(ConsumeUrl);
+            HttpResponseMessage actual = await Client.GetAsync(HttpHelper.ConsumeUrl);
             responses.Add(actual);
         }
         
@@ -160,9 +166,9 @@ public class ReliabilityTests(BrokerFactory factory) : BaseFunctionalTest(factor
         string payloadText = "Some payload representation";
         byte[] payload = Encoding.UTF8.GetBytes(payloadText);
         
-        using HttpContent content = CreateHttpContent(payload);
+        using HttpContent content = HttpHelper.CreateHttpContent(payload);
         
-        await Client.PostAsync(PublishUrl, content);
+        await Client.PostAsync(HttpHelper.PublishUrl, content);
 
         List<HttpResponseMessage> responses = [];
         
@@ -171,7 +177,7 @@ public class ReliabilityTests(BrokerFactory factory) : BaseFunctionalTest(factor
         {
             await Task.Delay(TimeSpan.FromMilliseconds(500));
             
-            HttpResponseMessage response = await Client.GetAsync(ConsumeUrl);
+            HttpResponseMessage response = await Client.GetAsync(HttpHelper.ConsumeUrl);
             responses.Add(response);
         }
         
@@ -181,9 +187,48 @@ public class ReliabilityTests(BrokerFactory factory) : BaseFunctionalTest(factor
             HttpResponseMessage actual = responses[i];
             
             actual.StatusCode.ShouldBe(HttpStatusCode.OK);
-            actual.ShouldHaveHeader("X-Delivery-Attempts", (i + 1).ToString());
+            actual.ShouldHaveHeader(HttpHelper.DeliveryAttemptHeaderName, (i + 1).ToString());
         }
         
         responses[3].StatusCode.ShouldBe(HttpStatusCode.NoContent);
+    }
+
+    [Fact]
+    public async Task Broker_Shutdowns_WhenWalStorageExceptionOccuredDuringWalEventAppending()
+    {
+        // Arrange
+        TaskCompletionSource<bool> shutdownTriggered = new();
+        TimeSpan waitingInterval = TimeSpan.FromSeconds(5);
+        
+        ConfigureServices(services =>
+        {
+            services.AddKeyedSingleton<IFileAppender<EnqueueWalEvent>>("Enqueue", (_, _) => new BrokenEnqueueFileAppender());
+            
+            services.AddHostedService<ShutdownMonitorService>(sp => 
+                new ShutdownMonitorService(
+                    sp.GetRequiredService<IHostApplicationLifetime>(), 
+                    shutdownTriggered));
+        });
+        
+        string textPayload = "Some payload representation";
+        byte[] payload = Encoding.UTF8.GetBytes(textPayload);
+        using HttpContent content = HttpHelper.CreateHttpContent(payload);
+
+        // Act
+        try
+        {
+            await Client.PostAsync(HttpHelper.PublishUrl, content);
+        }
+        catch (Exception)
+        {
+            // Ignore
+        }
+        
+        // Assert
+        Task<bool> shutdownTask = shutdownTriggered.Task;
+        Task completedTask = await Task.WhenAny(shutdownTask, Task.Delay(waitingInterval));
+
+        completedTask.ShouldBe(shutdownTask);
+        (await shutdownTask).ShouldBeTrue();
     }
 }

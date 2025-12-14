@@ -1,5 +1,4 @@
-﻿using System.Net.Http.Headers;
-using MessageBroker.EndToEndTests.Extensions;
+﻿using MessageBroker.EndToEndTests.Extensions;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.AspNetCore.TestHost;
 using Microsoft.Extensions.DependencyInjection;
@@ -8,10 +7,6 @@ namespace MessageBroker.EndToEndTests.Abstractions;
 
 public abstract class BaseFunctionalTest : IClassFixture<BrokerFactory>, IDisposable
 {
-    protected const string PublishUrl = "api/broker/publish";
-    protected const string ConsumeUrl = "api/broker/consume";
-    protected const string AckUrl = "api/broker/ack";
-    
     private WebApplicationFactory<Program> _isolatedFactory;
     private HttpClient _client;
     
@@ -56,13 +51,6 @@ public abstract class BaseFunctionalTest : IClassFixture<BrokerFactory>, IDispos
         
         _isolatedFactory = newFactory;
         _client = newFactory.CreateClient();
-    }
-
-    protected HttpContent CreateHttpContent(byte[] payload)
-    {
-        ByteArrayContent content = new(payload);
-        content.Headers.ContentType = new MediaTypeHeaderValue("application/octet-stream");
-        return content;
     }
     
     public void Dispose()

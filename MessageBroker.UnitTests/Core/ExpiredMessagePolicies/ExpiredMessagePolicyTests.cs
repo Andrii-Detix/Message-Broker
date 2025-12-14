@@ -1,6 +1,7 @@
 ﻿using MessageBroker.Core.ExpiredMessagePolicies;
 using MessageBroker.Core.ExpiredMessagePolicies.Exceptions;
 using MessageBroker.Core.Messages.Models;
+using MessageBroker.UnitTests.Helpers;
 using Microsoft.Extensions.Time.Testing;
 using Shouldly;
 
@@ -63,7 +64,8 @@ public class ExpiredMessagePolicyTests
         TimeSpan expirationTime = TimeSpan.FromMinutes(5);
         ExpiredMessagePolicy sut = new(expirationTime, timeProvider);
 
-        Message message = Message.Create(Guid.CreateVersion7(), [], 2, timeProvider);
+        Message message = MessageHelper.CreateMessage();
+        
         message.TryEnqueue();
         message.TrySend(timeProvider);
         
@@ -84,7 +86,8 @@ public class ExpiredMessagePolicyTests
         TimeSpan expirationTime = TimeSpan.FromMinutes(5);
         ExpiredMessagePolicy sut = new(expirationTime, timeProvider);
 
-        Message message = Message.Create(Guid.CreateVersion7(), [], 2, timeProvider);
+        Message message = MessageHelper.CreateMessage();
+        
         message.TryEnqueue();
         message.TrySend(timeProvider);
         
@@ -105,7 +108,7 @@ public class ExpiredMessagePolicyTests
         TimeSpan expirationTime = TimeSpan.FromMinutes(5);
         ExpiredMessagePolicy sut = new(expirationTime, timeProvider);
 
-        Message message = Message.Create(Guid.CreateVersion7(), [], 2, timeProvider);
+        Message message = MessageHelper.CreateMessage();
         
         // Act
         bool actual = sut.IsExpired(message);

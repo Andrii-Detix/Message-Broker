@@ -2,6 +2,7 @@
 using System.Text;
 using MessageBroker.EndToEndTests.Abstractions;
 using MessageBroker.EndToEndTests.Extensions;
+using MessageBroker.EndToEndTests.Helpers;
 using Shouldly;
 
 namespace MessageBroker.EndToEndTests.Tests;
@@ -15,10 +16,10 @@ public class SmokeTests(BrokerFactory factory) : BaseFunctionalTest(factory)
         string payloadText = "Some payload representation";
         byte[] payload = Encoding.UTF8.GetBytes(payloadText);
         
-        using HttpContent content = CreateHttpContent(payload);
+        using HttpContent content = HttpHelper.CreateHttpContent(payload);
         
         // Act
-        HttpResponseMessage actual = await Client.PostAsync(PublishUrl, content);
+        HttpResponseMessage actual = await Client.PostAsync(HttpHelper.PublishUrl, content);
         
         // Assert
         actual.StatusCode.ShouldBe(HttpStatusCode.Created);
@@ -36,10 +37,10 @@ public class SmokeTests(BrokerFactory factory) : BaseFunctionalTest(factory)
 
         byte[] payload = [0x01, 0x02, 0x03];
         
-        using HttpContent content = CreateHttpContent(payload);
+        using HttpContent content = HttpHelper.CreateHttpContent(payload);
         
         // Act
-        HttpResponseMessage actual = await Client.PostAsync(PublishUrl, content);
+        HttpResponseMessage actual = await Client.PostAsync(HttpHelper.PublishUrl, content);
         
         // Assert
         actual.StatusCode.ShouldBe(HttpStatusCode.RequestEntityTooLarge);
@@ -49,7 +50,7 @@ public class SmokeTests(BrokerFactory factory) : BaseFunctionalTest(factory)
     public async Task Consume_ReturnsNoContent_WhenNoMessagesExist()
     {
         // Act
-        HttpResponseMessage actual = await Client.GetAsync(ConsumeUrl);
+        HttpResponseMessage actual = await Client.GetAsync(HttpHelper.ConsumeUrl);
         
         // Assert
         actual.StatusCode.ShouldBe(HttpStatusCode.NoContent);
@@ -62,12 +63,12 @@ public class SmokeTests(BrokerFactory factory) : BaseFunctionalTest(factory)
         string payloadText = "Some payload representation";
         byte[] payload = Encoding.UTF8.GetBytes(payloadText);
         
-        using HttpContent content = CreateHttpContent(payload);
+        using HttpContent content = HttpHelper.CreateHttpContent(payload);
         
-        await Client.PostAsync(PublishUrl, content);
+        await Client.PostAsync(HttpHelper.PublishUrl, content);
         
         // Act
-        HttpResponseMessage actual = await Client.GetAsync(ConsumeUrl);
+        HttpResponseMessage actual = await Client.GetAsync(HttpHelper.ConsumeUrl);
         
         // Assert
         actual.StatusCode.ShouldBe(HttpStatusCode.OK);
@@ -81,33 +82,33 @@ public class SmokeTests(BrokerFactory factory) : BaseFunctionalTest(factory)
     public async Task Consume_ReturnsHeaders_WhenMessageExists()
     {
         // Arrange
-        using HttpContent content = CreateHttpContent([]);
+        using HttpContent content = HttpHelper.CreateHttpContent([]);
         
-        await Client.PostAsync(PublishUrl, content);
+        await Client.PostAsync(HttpHelper.PublishUrl, content);
         
         // Act
-        HttpResponseMessage actual = await Client.GetAsync(ConsumeUrl);
+        HttpResponseMessage actual = await Client.GetAsync(HttpHelper.ConsumeUrl);
         
         // Assert
         actual.StatusCode.ShouldBe(HttpStatusCode.OK);
 
-        string? messageId = actual.ShouldHaveHeader("X-Message-Id");
+        string? messageId = actual.ShouldHaveHeader(HttpHelper.MessageIdHeaderName);
         messageId.ShouldNotBeNullOrEmpty();
         
-        actual.ShouldHaveHeader("X-Delivery-Attempts", 1.ToString());
+        actual.ShouldHaveHeader(HttpHelper.DeliveryAttemptHeaderName, 1.ToString());
     }
 
     [Fact]
     public async Task Consume_ReturnsOnlyOneMessage_WhenOnlyOneMessageIsPublished()
     {
         // Arrange
-        using HttpContent content = CreateHttpContent([]);
+        using HttpContent content = HttpHelper.CreateHttpContent([]);
         
-        await Client.PostAsync(PublishUrl, content);
-        await Client.GetAsync(ConsumeUrl);
+        await Client.PostAsync(HttpHelper.PublishUrl, content);
+        await Client.GetAsync(HttpHelper.ConsumeUrl);
         
         // Act
-        HttpResponseMessage actual = await Client.GetAsync(ConsumeUrl);
+        HttpResponseMessage actual = await Client.GetAsync(HttpHelper.ConsumeUrl);
         
         // Assert
         actual.StatusCode.ShouldBe(HttpStatusCode.NoContent);
@@ -122,8 +123,8 @@ public class SmokeTests(BrokerFactory factory) : BaseFunctionalTest(factory)
         foreach (string message in messages)
         {
             byte[] payload = Encoding.UTF8.GetBytes(message);
-            using HttpContent content = CreateHttpContent(payload);
-            await Client.PostAsync(PublishUrl, content);
+            using HttpContent content = HttpHelper.CreateHttpContent(payload);
+            await Client.PostAsync(HttpHelper.PublishUrl, content);
         }
 
         List<HttpResponseMessage> responses = [];
@@ -131,7 +132,7 @@ public class SmokeTests(BrokerFactory factory) : BaseFunctionalTest(factory)
         // Act
         for (int i = 0; i < messages.Length; i++)
         {
-            HttpResponseMessage response = await Client.GetAsync(ConsumeUrl);
+            HttpResponseMessage response = await Client.GetAsync(HttpHelper.ConsumeUrl);
             responses.Add(response);
         }
         
@@ -152,15 +153,15 @@ public class SmokeTests(BrokerFactory factory) : BaseFunctionalTest(factory)
     public async Task Ack_ReturnsOk_WhenMessageIsInFlight()
     {
         // Arrange
-        using HttpContent content = CreateHttpContent([]);
+        using HttpContent content = HttpHelper.CreateHttpContent([]);
         
-        await Client.PostAsync(PublishUrl, content);
+        await Client.PostAsync(HttpHelper.PublishUrl, content);
         
-        HttpResponseMessage consumeResponse = await Client.GetAsync(ConsumeUrl);
-        string messageId = consumeResponse.ShouldHaveHeader("X-Message-Id")!;
+        HttpResponseMessage consumeResponse = await Client.GetAsync(HttpHelper.ConsumeUrl);
+        string messageId = consumeResponse.ShouldHaveHeader(HttpHelper.MessageIdHeaderName)!;
         
         // Act
-        HttpResponseMessage actual = await Client.PostAsync($"{AckUrl}/{messageId}", null);
+        HttpResponseMessage actual = await Client.PostAsync(HttpHelper.AckUrl(messageId), null);
         
         // Assert
         actual.StatusCode.ShouldBe(HttpStatusCode.OK);
@@ -170,14 +171,14 @@ public class SmokeTests(BrokerFactory factory) : BaseFunctionalTest(factory)
     public async Task Ack_ReturnsNotFound_WhenMessageWithIdIsNotInFlight()
     {
         // Arrange
-        using HttpContent content = CreateHttpContent([]);
+        using HttpContent content = HttpHelper.CreateHttpContent([]);
         
-        await Client.PostAsync(PublishUrl, content);
+        await Client.PostAsync(HttpHelper.PublishUrl, content);
         
-        HttpResponseMessage consumeResponse = await Client.GetAsync(ConsumeUrl);
-        string messageId = consumeResponse.ShouldHaveHeader("X-Message-Id")!;
+        HttpResponseMessage consumeResponse = await Client.GetAsync(HttpHelper.ConsumeUrl);
+        string messageId = consumeResponse.ShouldHaveHeader(HttpHelper.MessageIdHeaderName)!;
 
-        string url = $"{AckUrl}/{messageId}";
+        string url = HttpHelper.AckUrl(messageId);
         
         await Client.PostAsync(url, null);
 
@@ -194,12 +195,12 @@ public class SmokeTests(BrokerFactory factory) : BaseFunctionalTest(factory)
         // Arrange
         byte[] payload = [0x00, 0xFF, 0xDE, 0xAD, 0xBE, 0xEF, 0x00];
         
-        using HttpContent content = CreateHttpContent(payload);
+        using HttpContent content = HttpHelper.CreateHttpContent(payload);
     
-        await Client.PostAsync(PublishUrl, content);
+        await Client.PostAsync(HttpHelper.PublishUrl, content);
         
         // Act
-        HttpResponseMessage actual = await Client.GetAsync(ConsumeUrl);
+        HttpResponseMessage actual = await Client.GetAsync(HttpHelper.ConsumeUrl);
         
         // Assert
         byte[] actualPayload = await actual.Content.ReadAsByteArrayAsync();

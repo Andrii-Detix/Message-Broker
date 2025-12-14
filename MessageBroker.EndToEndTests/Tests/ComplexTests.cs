@@ -1,6 +1,7 @@
 ﻿using System.Net;
 using System.Text;
 using MessageBroker.EndToEndTests.Abstractions;
+using MessageBroker.EndToEndTests.Helpers;
 using Shouldly;
 
 namespace MessageBroker.EndToEndTests.Tests;
@@ -36,8 +37,8 @@ public class ComplexTests(BrokerFactory factory) : BaseFunctionalTest(factory)
 
                 for (; from < to; from++)
                 {
-                    using HttpContent content = CreateHttpContent(payloads[from]);
-                    await Client.PostAsync(PublishUrl, content);
+                    using HttpContent content = HttpHelper.CreateHttpContent(payloads[from]);
+                    await Client.PostAsync(HttpHelper.PublishUrl, content);
                 }
             }))
             .ToArray();
@@ -49,7 +50,7 @@ public class ComplexTests(BrokerFactory factory) : BaseFunctionalTest(factory)
 
         for (int i = 0; i < totalMessageCount; i++)
         {
-            HttpResponseMessage response = await Client.GetAsync(ConsumeUrl);
+            HttpResponseMessage response = await Client.GetAsync(HttpHelper.ConsumeUrl);
             if (response.StatusCode == HttpStatusCode.OK)
             {
                 string actualTextPayload = await response.Content.ReadAsStringAsync();
@@ -60,7 +61,7 @@ public class ComplexTests(BrokerFactory factory) : BaseFunctionalTest(factory)
         actualTextPayloads.Count.ShouldBe(totalMessageCount);
         actualTextPayloads.ShouldBe(textPayloads, ignoreOrder: true);
         
-        HttpResponseMessage noContentResponse = await Client.GetAsync(ConsumeUrl);
+        HttpResponseMessage noContentResponse = await Client.GetAsync(HttpHelper.ConsumeUrl);
         noContentResponse.StatusCode.ShouldBe(HttpStatusCode.NoContent);
     }
 
@@ -87,8 +88,8 @@ public class ComplexTests(BrokerFactory factory) : BaseFunctionalTest(factory)
 
         foreach (byte[] payload in payloads)
         {
-            using HttpContent content = CreateHttpContent(payload);
-            await Client.PostAsync(PublishUrl, content);
+            using HttpContent content = HttpHelper.CreateHttpContent(payload);
+            await Client.PostAsync(HttpHelper.PublishUrl, content);
         }
         
         // Act
@@ -99,7 +100,7 @@ public class ComplexTests(BrokerFactory factory) : BaseFunctionalTest(factory)
                 
                 for (int i = 0; i < messagesPerThread; i++)
                 {
-                    HttpResponseMessage response = await Client.GetAsync(ConsumeUrl);
+                    HttpResponseMessage response = await Client.GetAsync(HttpHelper.ConsumeUrl);
 
                     if (response.StatusCode == HttpStatusCode.OK)
                     {
@@ -133,7 +134,7 @@ public class ComplexTests(BrokerFactory factory) : BaseFunctionalTest(factory)
             .ToArray();
         allActualTextPayloads.ShouldBe(textPayloads, ignoreOrder: true);
         
-        HttpResponseMessage noContentResponse = await Client.GetAsync(ConsumeUrl);
+        HttpResponseMessage noContentResponse = await Client.GetAsync(HttpHelper.ConsumeUrl);
         noContentResponse.StatusCode.ShouldBe(HttpStatusCode.NoContent);
     }
 
@@ -162,9 +163,9 @@ public class ComplexTests(BrokerFactory factory) : BaseFunctionalTest(factory)
             {
                 string textPayload = $"Message-{i}";
                 byte[] payload = Encoding.UTF8.GetBytes(textPayload);
-                using HttpContent content = CreateHttpContent(payload);
+                using HttpContent content = HttpHelper.CreateHttpContent(payload);
                 
-                await Client.PostAsync(PublishUrl, content, ct);
+                await Client.PostAsync(HttpHelper.PublishUrl, content, ct);
                 publishedData.Add(textPayload);
             }
         }, ct);
@@ -173,7 +174,7 @@ public class ComplexTests(BrokerFactory factory) : BaseFunctionalTest(factory)
         {
             while (consumedData.Count < messageCount)
             {
-                HttpResponseMessage result = await Client.GetAsync(ConsumeUrl, ct);
+                HttpResponseMessage result = await Client.GetAsync(HttpHelper.ConsumeUrl, ct);
                 
                 if (result.StatusCode == HttpStatusCode.OK)
                 {
@@ -212,12 +213,12 @@ public class ComplexTests(BrokerFactory factory) : BaseFunctionalTest(factory)
         for (int i = 0; i < messageCount; i++)
         {
             byte[] payload = Encoding.UTF8.GetBytes($"Message-{i}");
-            using HttpContent content = CreateHttpContent(payload);
-            await Client.PostAsync(PublishUrl, content);
+            using HttpContent content = HttpHelper.CreateHttpContent(payload);
+            await Client.PostAsync(HttpHelper.PublishUrl, content);
             
-            HttpResponseMessage result = await Client.GetAsync(ConsumeUrl);
+            HttpResponseMessage result = await Client.GetAsync(HttpHelper.ConsumeUrl);
             
-            string id = result.Headers.GetValues("X-Message-Id").First();
+            string id = result.Headers.GetValues(HttpHelper.MessageIdHeaderName).First();
             messageIds.Add(id);
         }
         
@@ -228,7 +229,7 @@ public class ComplexTests(BrokerFactory factory) : BaseFunctionalTest(factory)
         // Act
         foreach (string id in messageIds)
         {
-            await Client.PostAsync($"{AckUrl}/{id}", null);
+            await Client.PostAsync(HttpHelper.AckUrl(id), null);
         }
 
         await Task.Delay(1500);

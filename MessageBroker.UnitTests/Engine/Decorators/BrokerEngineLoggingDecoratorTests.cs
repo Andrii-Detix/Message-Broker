@@ -1,13 +1,12 @@
 ﻿using MessageBroker.Core.Messages.Models;
 using MessageBroker.Engine.Abstractions;
-using MessageBroker.Engine.BrokerEngines;
 using MessageBroker.Engine.Decorators.BrokerEngine;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Time.Testing;
 using Moq;
 using Shouldly;
 
-namespace MessageBroker.UnitTests.Engine.BrokerEngines;
+namespace MessageBroker.UnitTests.Engine.Decorators;
 
 public class BrokerEngineLoggingDecoratorTests
 {
@@ -25,7 +24,7 @@ public class BrokerEngineLoggingDecoratorTests
     {
         // Arrange
         byte[] payload = [0x01, 0x02];
-        BrokerEngineLoggingDecorator sut = new(_innerEngineMock.Object, _loggerMock.Object);
+        BrokerEngineLoggingDecorator sut = CreateSut();
         
         // Act
         sut.Publish(payload);
@@ -43,8 +42,8 @@ public class BrokerEngineLoggingDecoratorTests
         
         _innerEngineMock.Setup(e => e.Publish(payload))
             .Throws(new Exception("Custom exception."));
-        
-        BrokerEngineLoggingDecorator sut = new(_innerEngineMock.Object, _loggerMock.Object);
+
+        BrokerEngineLoggingDecorator sut = CreateSut();
         
         // Act
         Action actual = () => sut.Publish(payload);
@@ -66,8 +65,8 @@ public class BrokerEngineLoggingDecoratorTests
         
         _innerEngineMock.Setup(e => e.Consume())
             .Returns(message);
-        
-        BrokerEngineLoggingDecorator sut = new(_innerEngineMock.Object, _loggerMock.Object);
+
+        BrokerEngineLoggingDecorator sut = CreateSut();
         
         // Act
         Message? actual = sut.Consume();
@@ -86,8 +85,8 @@ public class BrokerEngineLoggingDecoratorTests
         // Arrange
         _innerEngineMock.Setup(e => e.Consume())
             .Returns((Message?)null);
-        
-        BrokerEngineLoggingDecorator sut = new(_innerEngineMock.Object, _loggerMock.Object);
+
+        BrokerEngineLoggingDecorator sut = CreateSut();
         
         // Act
         Message? actual = sut.Consume();
@@ -105,8 +104,8 @@ public class BrokerEngineLoggingDecoratorTests
         // Arrange
         _innerEngineMock.Setup(e => e.Consume())
             .Throws(new Exception("Custom exception."));
-        
-        BrokerEngineLoggingDecorator sut = new(_innerEngineMock.Object, _loggerMock.Object);
+
+        BrokerEngineLoggingDecorator sut = CreateSut();
         
         // Act
         Action actual = () => sut.Consume();
@@ -124,7 +123,7 @@ public class BrokerEngineLoggingDecoratorTests
     {
         // Arrange
         Guid messageId = Guid.CreateVersion7();
-        BrokerEngineLoggingDecorator sut = new(_innerEngineMock.Object, _loggerMock.Object);
+        BrokerEngineLoggingDecorator sut = CreateSut();
         
         // Act
         sut.Ack(messageId);
@@ -142,8 +141,8 @@ public class BrokerEngineLoggingDecoratorTests
         
         _innerEngineMock.Setup(e => e.Ack(messageId))
             .Throws(new Exception("Custom exception."));
-        
-        BrokerEngineLoggingDecorator sut = new(_innerEngineMock.Object, _loggerMock.Object);
+
+        BrokerEngineLoggingDecorator sut = CreateSut();
         
         // Act
         Action actual = () => sut.Ack(messageId);
@@ -168,5 +167,10 @@ public class BrokerEngineLoggingDecoratorTests
             ),
             times
         );
+    }
+
+    private BrokerEngineLoggingDecorator CreateSut()
+    {
+        return new(_innerEngineMock.Object, _loggerMock.Object);
     }
 }

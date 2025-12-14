@@ -7,7 +7,7 @@ using MessageBroker.EndToEndTests.Extensions;
 using MessageBroker.EndToEndTests.Helpers;
 using Shouldly;
 
-namespace MessageBroker.EndToEndTests.Durability;
+namespace MessageBroker.EndToEndTests.Tests;
 
 public class DurabilityTests : IDisposable
 {
