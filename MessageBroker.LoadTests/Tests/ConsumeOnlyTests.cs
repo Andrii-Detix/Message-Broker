@@ -16,7 +16,8 @@ public class ConsumeOnlyTests(BrokerFactory factory, ITestOutputHelper output)
         WithOptions(new()
         {
             { "MessageBroker:Broker:Requeue:RequeueInterval", "00:00:00.500" },
-            { "MessageBroker:Broker:ExpiredPolicy:ExpirationTime", "00:00:00.010"}
+            { "MessageBroker:Broker:ExpiredPolicy:ExpirationTime", "00:00:00.010"},
+            { "MessageBroker:Broker:Message:MaxDeliveryAttempts", int.MaxValue.ToString() }
         });
         
         LoadTestConfig config = new()
@@ -41,7 +42,8 @@ public class ConsumeOnlyTests(BrokerFactory factory, ITestOutputHelper output)
         WithOptions(new()
         {
             { "MessageBroker:Broker:Requeue:RequeueInterval", "00:00:00.500" },
-            { "MessageBroker:Broker:ExpiredPolicy:ExpirationTime", "00:00:00.010"}
+            { "MessageBroker:Broker:ExpiredPolicy:ExpirationTime", "00:00:00.010"},
+            { "MessageBroker:Broker:Message:MaxDeliveryAttempts", int.MaxValue.ToString() }
         });
         
         LoadTestConfig config = new()
