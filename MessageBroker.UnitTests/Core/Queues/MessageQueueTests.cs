@@ -559,6 +559,49 @@ public class MessageQueueTests
         actual.Select(m => m.Id).ShouldBe(expiredIds, ignoreOrder: true);
     }
 
+    [Fact]
+    public void TakeExpiredMessages_RemovesOnlyExpiredMessagesFromInFlight_WhenInFlightContainsMixedMessages()
+    {
+        // Arrange
+        MessageQueue sut = CreateSut();
+
+        Message[] expiredMessages = MessageHelper.CreateMessages(2);
+        Message[] activeMessages = MessageHelper.CreateMessages(2);
+
+        Message[] mixedMessages = 
+        [
+            activeMessages[0],
+            expiredMessages[0],
+            expiredMessages[1],
+            activeMessages[1]
+        ];
+        
+        foreach (Message message in mixedMessages)
+        {
+            sut.TryEnqueue(message);
+            sut.TryConsume(out _);
+        }
+        
+        Mock<IExpiredMessagePolicy> policyMock = new();
+        policyMock.Setup(p => p.IsExpired(It.IsAny<Message>()))
+            .Returns((Message message) => expiredMessages.Select(m => m.Id).Contains(message.Id));
+        IExpiredMessagePolicy policy = policyMock.Object;
+        
+        // Act
+        sut.TakeExpiredMessages(policy);
+        
+        // Assert
+        foreach (Message expiredMessage in expiredMessages)
+        {
+            sut.Ack(expiredMessage.Id).ShouldBeNull();
+        }
+
+        foreach (Message activeMessage in activeMessages)
+        {
+            sut.Ack(activeMessage.Id).ShouldNotBeNull();
+        }
+    }
+
     private static MessageQueue CreateSut(
         int? maxSwapCount = null,
         TimeProvider? timeProvider = null)
