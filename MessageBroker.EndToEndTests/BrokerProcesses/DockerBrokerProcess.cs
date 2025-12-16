@@ -2,21 +2,47 @@
 using System.Runtime.InteropServices;
 using DotNet.Testcontainers.Builders;
 using DotNet.Testcontainers.Containers;
+using MessageBroker.EndToEndTests.Abstractions;
 
-namespace MessageBroker.EndToEndTests.Abstractions;
+namespace MessageBroker.EndToEndTests.BrokerProcesses;
 
-public static class BrokerContainerFactory
+public class DockerBrokerProcess(
+    string? hostDirectory = null,
+    bool resetOnStart = false,
+    Dictionary<string, string?>? envVars = null) 
+    : IBrokerProcess
 {
     private const string ImageName = "message-broker:test";
     private const string MountPoint = "/data";
     private const string WalDirectory = "/data/wal";
+    private const int InternalPort = 8080;
 
-    public const int InternalPort = 8080;
+    private readonly IContainer _container = Create(hostDirectory, resetOnStart, envVars);
+    
+    public async Task StartAsync()
+    {
+        await _container.StartAsync();
+    }
 
-    public static IContainer Create(
+    public async Task StopAsync()
+    {
+        await _container.StopAsync();
+        await _container.DisposeAsync();
+    }
+
+    public HttpClient CreateClient()
+    {
+        int port = _container.GetMappedPublicPort(InternalPort);
+        return new HttpClient
+        {
+            BaseAddress = new Uri($"http://localhost:{port}")
+        };
+    }
+    
+    private static IContainer Create(
         string? hostDirectory = null,
         bool resetOnStart = false,
-        Dictionary<string, string>? envVars = null)
+        Dictionary<string, string?>? envVars = null)
     {
         ContainerBuilder builder = new ContainerBuilder()
             .WithImage(ImageName)

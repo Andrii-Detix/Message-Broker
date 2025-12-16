@@ -1,8 +1,8 @@
 ﻿using System.Collections.Concurrent;
 using System.Net;
 using System.Text;
-using DotNet.Testcontainers.Containers;
 using MessageBroker.EndToEndTests.Abstractions;
+using MessageBroker.EndToEndTests.BrokerProcesses;
 using MessageBroker.EndToEndTests.Extensions;
 using MessageBroker.EndToEndTests.Helpers;
 using Shouldly;
@@ -12,18 +12,21 @@ namespace MessageBroker.EndToEndTests.Tests;
 public class DurabilityTests : IDisposable
 {
     private readonly string _hostDirectory;
+    private readonly BrokerProcessFactory _factory;
 
     public DurabilityTests()
     {
         _hostDirectory = Path.Combine(Path.GetTempPath(), Path.GetRandomFileName());
         Directory.CreateDirectory(_hostDirectory);
+        
+        _factory = new();
     }
 
     [Fact]
     public async Task Broker_RestoresMessagesAfterCrash_WhenResetOnStartIsDisabled()
     {
         // Arrange
-        Dictionary<string, string> options = new()
+        Dictionary<string, string?> options = new()
         {
             { "MessageBroker__Broker__ExpiredPolicy__ExpirationTime", "01:00:00" }
         };
@@ -31,22 +34,22 @@ public class DurabilityTests : IDisposable
         int messageCount = 50;
         string[] messages = CreateMessages(messageCount);
         
-        IContainer broker1 = BrokerContainerFactory.Create(_hostDirectory, envVars: options);
+        IBrokerProcess broker1 = _factory.Create(_hostDirectory, envVars: options);
         await broker1.StartAsync();
 
-        HttpClient client1 = CreateClient(broker1);
+        HttpClient client1 = broker1.CreateClient();
         
         await PublishMessages(client1, messages);
         
         await broker1.StopAsync();
         
-        IContainer broker2 = BrokerContainerFactory.Create(_hostDirectory, envVars: options);
+        IBrokerProcess broker2 = _factory.Create(_hostDirectory, envVars: options);
         
         // Act
         await broker2.StartAsync();
         
         // Assert
-        HttpClient client2 = CreateClient(broker2);
+        HttpClient client2 = broker2.CreateClient();
 
         string[] restoredMessages = await ConsumeMessages(client2, messageCount, true);
         
@@ -55,7 +58,7 @@ public class DurabilityTests : IDisposable
 
         await AssertQueueIsEmpty(client2);
 
-        await broker2.DisposeAsync();
+        await broker2.StopAsync();
     }
     
     [Fact]
@@ -65,33 +68,33 @@ public class DurabilityTests : IDisposable
         int messageCount = 50;
         string[] messages = CreateMessages(messageCount);
 
-        IContainer broker1 = BrokerContainerFactory.Create(_hostDirectory);
+        IBrokerProcess broker1 = _factory.Create(_hostDirectory);
         await broker1.StartAsync();
 
-        HttpClient client1 = CreateClient(broker1);
+        HttpClient client1 = broker1.CreateClient();
 
         await PublishMessages(client1, messages);
         
         await broker1.StopAsync();
         
-        IContainer broker2 = BrokerContainerFactory.Create(_hostDirectory, resetOnStart: true);
+        IBrokerProcess broker2 = _factory.Create(_hostDirectory, resetOnStart: true);
         
         // Act
         await broker2.StartAsync();
         
         // Assert
-        HttpClient client2 = CreateClient(broker2);
+        HttpClient client2 = broker2.CreateClient();
         
         await AssertQueueIsEmpty(client2);
-        
-        await broker2.DisposeAsync();
+
+        await broker2.StopAsync();
     }
 
     [Fact]
     public async Task Broker_RestoresMessagesAfterCrash_WhenMessagesWereRequeued()
     {
         // Arrange
-        Dictionary<string, string> options = new()
+        Dictionary<string, string?> options = new()
         {
             { "MessageBroker__Broker__ExpiredPolicy__ExpirationTime", "00:00:02" },
             { "MessageBroker__Broker__Requeue__RequeueInterval", "00:00:00.100" },
@@ -101,10 +104,10 @@ public class DurabilityTests : IDisposable
         int messageCount = 50;
         string[] messages = CreateMessages(messageCount);
 
-        IContainer broker1 = BrokerContainerFactory.Create(_hostDirectory, envVars: options);
+        IBrokerProcess broker1 = _factory.Create(_hostDirectory, envVars: options);
         await broker1.StartAsync();
 
-        HttpClient client1 = CreateClient(broker1);
+        HttpClient client1 = broker1.CreateClient();
 
         await PublishMessages(client1, messages);
 
@@ -114,13 +117,13 @@ public class DurabilityTests : IDisposable
         
         await broker1.StopAsync();
         
-        IContainer broker2 = BrokerContainerFactory.Create(_hostDirectory, envVars: options);
+        IBrokerProcess broker2 = _factory.Create(_hostDirectory, envVars: options);
         
         // Act
         await broker2.StartAsync();
         
         // Assert
-        HttpClient client2 = CreateClient(broker2);
+        HttpClient client2 = broker2.CreateClient();
 
         string[] restoredMessages = await ConsumeMessages(client2, messageCount, true);
         
@@ -129,7 +132,7 @@ public class DurabilityTests : IDisposable
 
         await AssertQueueIsEmpty(client2);
 
-        await broker2.DisposeAsync();
+        await broker2.StopAsync();
     }
 
     [Fact]
@@ -137,7 +140,7 @@ public class DurabilityTests : IDisposable
     {
         // Arrange
         int maxDeliveryAttempts = 2;
-        Dictionary<string, string> options = new()
+        Dictionary<string, string?> options = new()
         {
             { "MessageBroker__Broker__ExpiredPolicy__ExpirationTime", "00:00:00.010" },
             { "MessageBroker__Broker__Requeue__RequeueInterval", "00:00:00.100" },
@@ -146,10 +149,10 @@ public class DurabilityTests : IDisposable
 
         string message = "Message";
         
-        IContainer broker1 = BrokerContainerFactory.Create(_hostDirectory, envVars: options);
+        IBrokerProcess broker1 = _factory.Create(_hostDirectory, envVars: options);
         await broker1.StartAsync();
 
-        HttpClient client1 = CreateClient(broker1);
+        HttpClient client1 = broker1.CreateClient();
 
         await PublishMessages(client1, message);
 
@@ -161,24 +164,24 @@ public class DurabilityTests : IDisposable
         
         await broker1.StopAsync();
         
-        IContainer broker2 = BrokerContainerFactory.Create(_hostDirectory, envVars: options);
+        IBrokerProcess broker2 = _factory.Create(_hostDirectory, envVars: options);
         
         // Act
         await broker2.StartAsync();
         
         // Assert
-        HttpClient client2 = CreateClient(broker2);
+        HttpClient client2 = broker2.CreateClient();
         
         await AssertQueueIsEmpty(client2);
-        
-        await broker2.DisposeAsync();
+
+        await broker2.StopAsync();
     }
 
     [Fact]
     public async Task Broker_DoesNotRestoreAcknowledgeMessages()
     {
         // Arrange
-        Dictionary<string, string> options = new()
+        Dictionary<string, string?> options = new()
         {
             { "MessageBroker__Broker__ExpiredPolicy__ExpirationTime", "01:00:00" }
         };
@@ -186,10 +189,10 @@ public class DurabilityTests : IDisposable
         int messageCount = 50;
         string[] messages = CreateMessages(messageCount);
 
-        IContainer broker1 = BrokerContainerFactory.Create(_hostDirectory, envVars: options);
+        IBrokerProcess broker1 = _factory.Create(_hostDirectory, envVars: options);
         await broker1.StartAsync();
 
-        HttpClient client1 = CreateClient(broker1);
+        HttpClient client1 = broker1.CreateClient();
 
         await PublishMessages(client1, messages);
         
@@ -199,17 +202,17 @@ public class DurabilityTests : IDisposable
         
         await broker1.StopAsync();
         
-        IContainer broker2 = BrokerContainerFactory.Create(_hostDirectory, envVars: options);
+        IBrokerProcess broker2 = _factory.Create(_hostDirectory, envVars: options);
         
         // Act
         await broker2.StartAsync();
         
         // Assert
-        HttpClient client2 = CreateClient(broker2);
+        HttpClient client2 = broker2.CreateClient();
         
         await AssertQueueIsEmpty(client2);
-        
-        await broker2.DisposeAsync();
+
+        await broker2.StopAsync();
     }
 
     [Fact]
@@ -219,10 +222,10 @@ public class DurabilityTests : IDisposable
         int messageCount = 10;
         string[] messages = CreateMessages(messageCount);
         
-        IContainer broker1 = BrokerContainerFactory.Create(_hostDirectory);
+        IBrokerProcess broker1 = _factory.Create(_hostDirectory);
         await broker1.StartAsync();
-        
-        HttpClient client1 = CreateClient(broker1);
+
+        HttpClient client1 = broker1.CreateClient();
         
         await PublishMessages(client1, messages);
         
@@ -246,13 +249,13 @@ public class DurabilityTests : IDisposable
         
         await broker1.StopAsync();
         
-        IContainer broker2 = BrokerContainerFactory.Create(_hostDirectory);
+        IBrokerProcess broker2 = _factory.Create(_hostDirectory);
         
         // Act
         await broker2.StartAsync();
         
         // Assert
-        HttpClient client2 = CreateClient(broker2);
+        HttpClient client2 = broker2.CreateClient();
 
         string[] restoredMessages = await ConsumeMessages(client2, unacknowledgedMessage.Count, true);
         
@@ -261,14 +264,14 @@ public class DurabilityTests : IDisposable
         
         await AssertQueueIsEmpty(client2);
 
-        await broker2.DisposeAsync();
+        await broker2.StopAsync();
     }
 
     [Fact]
     public async Task Broker_RestoresMessagesFromMultipleWalFiles()
     {
         // Arrange
-        Dictionary<string, string> options = new()
+        Dictionary<string, string?> options = new()
         {
             { "MessageBroker__Wal__MaxWriteCountPerFile", "5" },
             { "MessageBroker__Wal__GarbageCollector__CollectInterval", "01:00:00" },
@@ -277,22 +280,22 @@ public class DurabilityTests : IDisposable
         int messageCount = 50;
         string[] messages = CreateMessages(messageCount);
 
-        IContainer broker1 = BrokerContainerFactory.Create(_hostDirectory, envVars: options);
+        IBrokerProcess broker1 = _factory.Create(_hostDirectory, envVars: options);
         await broker1.StartAsync();
 
-        HttpClient client1 = CreateClient(broker1);
+        HttpClient client1 = broker1.CreateClient();
         
         await PublishMessages(client1, messages);
         
         await broker1.StopAsync();
         
-        IContainer broker2 = BrokerContainerFactory.Create(_hostDirectory, envVars: options);
+        IBrokerProcess broker2 = _factory.Create(_hostDirectory, envVars: options);
         
         // Act
         await broker2.StartAsync();
         
         //Assert
-        HttpClient client2 = CreateClient(broker2);
+        HttpClient client2 = broker2.CreateClient();
 
         string[] restoredMessages = await ConsumeMessages(client2, messageCount, true);
         
@@ -301,14 +304,14 @@ public class DurabilityTests : IDisposable
 
         await AssertQueueIsEmpty(client2);
 
-        await broker2.DisposeAsync();
+        await broker2.StartAsync();
     }
 
     [Fact]
     public async Task Broker_RestoresCorrectly_WhenGarbageCollectorDeletedOldLogs()
     {
         // Arrange
-        Dictionary<string, string> options = new()
+        Dictionary<string, string?> options = new()
         {
             { "MessageBroker__Wal__MaxWriteCountPerFile", "5" },
             { "MessageBroker__Wal__GarbageCollector__CollectInterval", "00:00:00.500" },
@@ -320,10 +323,10 @@ public class DurabilityTests : IDisposable
         
         string[] messages = CreateMessages(messageCount);
         
-        IContainer broker1 = BrokerContainerFactory.Create(_hostDirectory, envVars: options);
+        IBrokerProcess broker1 = _factory.Create(_hostDirectory, envVars: options);
         await broker1.StartAsync();
 
-        HttpClient client1 = CreateClient(broker1);
+        HttpClient client1 = broker1.CreateClient();
 
         await PublishMessages(client1, messages);
         
@@ -335,13 +338,13 @@ public class DurabilityTests : IDisposable
         
         await broker1.StopAsync();
         
-        IContainer broker2 = BrokerContainerFactory.Create(_hostDirectory, envVars: options);
+        IBrokerProcess broker2 = _factory.Create(_hostDirectory, envVars: options);
         
         // Act
         await broker2.StartAsync();
         
         // Assert
-        HttpClient client2 = CreateClient(broker2);
+        HttpClient client2 = broker2.CreateClient();
         
         string[] restoredMessages = await ConsumeMessages(client2, expectedRestoredMessageCount, true);
         
@@ -350,14 +353,14 @@ public class DurabilityTests : IDisposable
         
         await AssertQueueIsEmpty(client2);
 
-        await broker2.DisposeAsync();
+        await broker2.StopAsync();
     }
 
     [Fact]
     public async Task Broker_FailsToStart_WhenWalFileIsCorrupted()
     {
         // Arrange
-        Dictionary<string, string> options = new()
+        Dictionary<string, string?> options = new()
         {
             { "MessageBroker__Wal__GarbageCollector__CollectInterval", "01:00:00" },
         };
@@ -365,10 +368,10 @@ public class DurabilityTests : IDisposable
         int messageCount = 50;
         string[] messages = CreateMessages(messageCount);
         
-        IContainer broker1 = BrokerContainerFactory.Create(_hostDirectory, envVars: options);
+        IBrokerProcess broker1 = _factory.Create(_hostDirectory, envVars: options);
         await broker1.StartAsync();
 
-        HttpClient client1 = CreateClient(broker1);
+        HttpClient client1 = broker1.CreateClient();
         
         await PublishMessages(client1, messages);
         
@@ -379,15 +382,9 @@ public class DurabilityTests : IDisposable
             .GetFiles(directoryPath, "enqueue-*.log")
             .First(f => !f.Contains("merged"));
 
-        await using (var fs = new FileStream(enqueueFile, FileMode.Open, FileAccess.Write))
-        {
-            fs.Position = 0;
+        await CorruptFileWithRetryA(enqueueFile);
         
-            byte[] garbage = [0xFF, 0xFF, 0xFF, 0xFF, 0x00, 0x01, 0x02]; 
-            fs.Write(garbage, 0, garbage.Length);
-        }
-        
-        IContainer broker2 = BrokerContainerFactory.Create(_hostDirectory, envVars: options);
+        IBrokerProcess broker2 = _factory.Create(_hostDirectory, envVars: options);
         
         // Act
         Task actual = broker2.StartAsync();
@@ -407,7 +404,7 @@ public class DurabilityTests : IDisposable
         ConcurrentBag<string> sentMessages = [];
         ConcurrentBag<string> ackedMessages = [];
         
-        IContainer broker1 = BrokerContainerFactory.Create(_hostDirectory);
+        IBrokerProcess broker1 = _factory.Create(_hostDirectory);
         await broker1.StartAsync();
         
         using CancellationTokenSource cts = new(testDuration);
@@ -416,7 +413,7 @@ public class DurabilityTests : IDisposable
         Task[] producers = Enumerable.Range(0, producersCount)
             .Select(async threadIdx =>
             {
-                HttpClient client = CreateClient(broker1);
+                HttpClient client = broker1.CreateClient();
                 int messageIdx = 0;
 
                 while (!ct.IsCancellationRequested)
@@ -444,7 +441,7 @@ public class DurabilityTests : IDisposable
         Task[] consumers = Enumerable.Range(0, consumersCount)
             .Select(async _ =>
             {
-                HttpClient client = CreateClient(broker1);
+                HttpClient client = broker1.CreateClient();
 
                 while (!ct.IsCancellationRequested)
                 {
@@ -479,13 +476,13 @@ public class DurabilityTests : IDisposable
         
         await broker1.StopAsync();
         
-        IContainer broker2 = BrokerContainerFactory.Create(_hostDirectory);
+        IBrokerProcess broker2 = _factory.Create(_hostDirectory);
         
         // Act
         await broker2.StartAsync();
         
         // Assert
-        HttpClient client2 = CreateClient(broker2);
+        HttpClient client2 = broker2.CreateClient();
         
         List<string> restoredMessages = [];
         while (true)
@@ -512,7 +509,7 @@ public class DurabilityTests : IDisposable
         
         await AssertQueueIsEmpty(client2);
         
-        await broker2.DisposeAsync();
+        await broker2.StopAsync();
     }
 
     private string[] CreateMessages(int count)
@@ -562,13 +559,32 @@ public class DurabilityTests : IDisposable
         response.StatusCode.ShouldBe(HttpStatusCode.NoContent);
     }
     
-    private HttpClient CreateClient(IContainer container)
+    private async Task CorruptFileWithRetryA(string filePath)
     {
-        int port = container.GetMappedPublicPort(BrokerContainerFactory.InternalPort);
-        return new HttpClient
+        const int maxRetries = 20;
+        const int delay = 200;
+
+        for (int i = 0; i < maxRetries; i++)
         {
-            BaseAddress = new Uri($"http://localhost:{port}")
-        };
+            try
+            {
+                await using FileStream fs = new(filePath, FileMode.Open, FileAccess.Write, FileShare.None);
+                fs.Position = 0;
+                byte[] garbage = [0xFF, 0xFF, 0xFF, 0xFF, 0x00, 0x01, 0x02]; 
+                fs.Write(garbage, 0, garbage.Length);
+                
+                return;
+            }
+            catch (IOException)
+            {
+                if (i == maxRetries - 1)
+                {
+                    throw;
+                }
+            }
+            
+            await Task.Delay(delay);
+        }
     }
 
     public void Dispose()
