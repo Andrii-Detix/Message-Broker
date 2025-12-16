@@ -53,7 +53,7 @@ public class WalGarbageCollectorServiceTests : IDisposable
         string ackFile = CreateFile("ack-1.log");
         string activeFile = CreateFile("active.log");
 
-        _manifestMock.Setup(m => m.LoadWalFiles()).Returns(new WalFiles
+        SetupWalFiles(new WalFiles
         {
             EnqueueFiles = [enqFile, activeFile],
             AckFiles = [ackFile, activeFile],
@@ -63,16 +63,12 @@ public class WalGarbageCollectorServiceTests : IDisposable
         Guid message1 = Guid.CreateVersion7();
         Guid message2 = Guid.CreateVersion7(); 
 
-        _enqReaderMock.Setup(r => r.Read(enqFile)).Returns(
-        [
+        SetupEnqueueEvents(
+            enqFile,
             new EnqueueWalEvent(message1, [0x01]), 
-            new EnqueueWalEvent(message2, [0x02])
-        ]);
-
-        _ackReaderMock.Setup(r => r.Read(ackFile)).Returns(
-        [
-            new AckWalEvent(message2) 
-        ]);
+            new EnqueueWalEvent(message2, [0x02]));
+        
+        SetupAckEvents(ackFile, new AckWalEvent(message2));
 
         WalGarbageCollectorService sut = CreateSut();
 
@@ -97,7 +93,7 @@ public class WalGarbageCollectorServiceTests : IDisposable
         string closedAckLog = CreateFile("ack-closed-segment.log");
         string activeLog = CreateFile("active-segment.log");
 
-        _manifestMock.Setup(m => m.LoadWalFiles()).Returns(new WalFiles
+        SetupWalFiles(new WalFiles
         {
             EnqueueFiles = [activeLog], 
             AckFiles = [closedAckLog, activeLog],
@@ -106,8 +102,7 @@ public class WalGarbageCollectorServiceTests : IDisposable
 
         Guid unmatchedMessageId = Guid.CreateVersion7();
     
-        _ackReaderMock.Setup(r => r.Read(closedAckLog))
-            .Returns([new AckWalEvent(unmatchedMessageId)]);
+        SetupAckEvents(closedAckLog, new AckWalEvent(unmatchedMessageId));
 
         WalGarbageCollectorService sut = CreateSut();
 
@@ -127,7 +122,7 @@ public class WalGarbageCollectorServiceTests : IDisposable
         // Arrange
         string enqFile = CreateFile("enq-requeue.log");
         
-        _manifestMock.Setup(m => m.LoadWalFiles()).Returns(new WalFiles
+        SetupWalFiles(new WalFiles
         {
             EnqueueFiles = [enqFile, "active"], 
             AckFiles = ["active"], 
@@ -136,10 +131,7 @@ public class WalGarbageCollectorServiceTests : IDisposable
 
         Guid zombieId = Guid.CreateVersion7();
 
-        _enqReaderMock.Setup(r => r.Read(enqFile)).Returns(
-        [
-            new RequeueWalEvent(zombieId)            
-        ]);
+        SetupEnqueueEvents(enqFile, new RequeueWalEvent(zombieId));
 
         WalGarbageCollectorService sut = CreateSut();
 
@@ -158,7 +150,7 @@ public class WalGarbageCollectorServiceTests : IDisposable
         string deadFile = CreateFile("dead-1.log");
         string activeFile = CreateFile("active.log");
 
-        _manifestMock.Setup(m => m.LoadWalFiles()).Returns(new WalFiles
+        SetupWalFiles(new WalFiles
         {
             EnqueueFiles = [enqFile, activeFile],
             AckFiles = [activeFile],
@@ -166,18 +158,14 @@ public class WalGarbageCollectorServiceTests : IDisposable
         });
 
         Guid message1 = Guid.CreateVersion7();
-        Guid message2 = Guid.CreateVersion7(); 
-
-        _enqReaderMock.Setup(r => r.Read(enqFile)).Returns(
-        [
+        Guid message2 = Guid.CreateVersion7();
+        
+        SetupEnqueueEvents(
+            enqFile,
             new EnqueueWalEvent(message1, [0x01]), 
-            new EnqueueWalEvent(message2, [0x02])
-        ]);
-
-        _deadReaderMock.Setup(r => r.Read(deadFile)).Returns(
-        [
-            new DeadWalEvent(message2) 
-        ]);
+            new EnqueueWalEvent(message2, [0x02]));
+        
+        SetupDeadEvents(deadFile, new DeadWalEvent(message2));
 
         WalGarbageCollectorService sut = CreateSut();
 
@@ -202,7 +190,7 @@ public class WalGarbageCollectorServiceTests : IDisposable
         string closedDeadLog = CreateFile("dead-closed-segment.log");
         string activeLog = CreateFile("active-segment.log");
 
-        _manifestMock.Setup(m => m.LoadWalFiles()).Returns(new WalFiles
+        SetupWalFiles(new WalFiles
         {
             EnqueueFiles = [activeLog], 
             AckFiles = [activeLog],
@@ -211,9 +199,8 @@ public class WalGarbageCollectorServiceTests : IDisposable
 
         Guid unmatchedMessageId = Guid.CreateVersion7();
     
-        _deadReaderMock.Setup(r => r.Read(closedDeadLog))
-            .Returns([new DeadWalEvent(unmatchedMessageId)]);
-
+        SetupDeadEvents(closedDeadLog, new DeadWalEvent(unmatchedMessageId));
+        
         WalGarbageCollectorService sut = CreateSut();
 
         // Act
@@ -232,7 +219,7 @@ public class WalGarbageCollectorServiceTests : IDisposable
         // Arrange
         string enqFile = CreateFile("enq-requeue.log");
         
-        _manifestMock.Setup(m => m.LoadWalFiles()).Returns(new WalFiles
+        SetupWalFiles(new WalFiles
         {
             EnqueueFiles = [enqFile, "active"], 
             AckFiles = ["active"], 
@@ -241,11 +228,10 @@ public class WalGarbageCollectorServiceTests : IDisposable
 
         Guid messageId = Guid.CreateVersion7();
 
-        _enqReaderMock.Setup(r => r.Read(enqFile)).Returns(
-        [
+        SetupEnqueueEvents(
+            enqFile,
             new EnqueueWalEvent(messageId, [0x01]),
-            new RequeueWalEvent(messageId)            
-        ]);
+            new RequeueWalEvent(messageId));
 
         WalGarbageCollectorService sut = CreateSut();
 
@@ -267,7 +253,7 @@ public class WalGarbageCollectorServiceTests : IDisposable
             DeadFiles = CreateFiles("old-dead-merged", "dead-1", "dead-active").ToList()
         };
         
-        _manifestMock.Setup(m => m.LoadWalFiles()).Returns(files);
+        SetupWalFiles(files);
         
         string[] oldInactiveFiles = 
         [
@@ -311,22 +297,13 @@ public class WalGarbageCollectorServiceTests : IDisposable
             DeadFiles = CreateFiles("dead-1", "dead-active").ToList()
         };
         
-        _manifestMock.Setup(m => m.LoadWalFiles()).Returns(files);
+        SetupWalFiles(files);
         
-        _enqReaderMock.Setup(r => r.Read(files.EnqueueFiles.First())).Returns(
-        [
-            new EnqueueWalEvent(Guid.CreateVersion7(), [0x01])    
-        ]);
+        SetupEnqueueEvents(files.EnqueueFiles.First(),  new EnqueueWalEvent(Guid.CreateVersion7(), []));
         
-        _ackReaderMock.Setup(r => r.Read(files.AckFiles.First())).Returns(
-        [
-            new AckWalEvent(Guid.CreateVersion7())    
-        ]);
+        SetupAckEvents(files.AckFiles.First(), new AckWalEvent(Guid.CreateVersion7()) );
         
-        _deadReaderMock.Setup(r => r.Read(files.DeadFiles.First())).Returns(
-        [
-            new DeadWalEvent(Guid.CreateVersion7())    
-        ]);
+        SetupDeadEvents(files.DeadFiles.First(), new DeadWalEvent(Guid.CreateVersion7()));
         
         WalGarbageCollectorService sut = CreateSut();
         
@@ -352,22 +329,13 @@ public class WalGarbageCollectorServiceTests : IDisposable
 
         string[] allFiles = [..files.EnqueueFiles, ..files.AckFiles, ..files.DeadFiles];
         
-        _manifestMock.Setup(m => m.LoadWalFiles()).Returns(files);
+        SetupWalFiles(files);
         
-        _enqReaderMock.Setup(r => r.Read(files.EnqueueFiles.First())).Returns(
-        [
-            new EnqueueWalEvent(Guid.CreateVersion7(), [0x01])    
-        ]);
+        SetupEnqueueEvents(files.EnqueueFiles.First(),  new EnqueueWalEvent(Guid.CreateVersion7(), []));
         
-        _ackReaderMock.Setup(r => r.Read(files.AckFiles.First())).Returns(
-        [
-            new AckWalEvent(Guid.CreateVersion7())    
-        ]);
+        SetupAckEvents(files.AckFiles.First(), new AckWalEvent(Guid.CreateVersion7()) );
         
-        _deadReaderMock.Setup(r => r.Read(files.DeadFiles.First())).Returns(
-        [
-            new DeadWalEvent(Guid.CreateVersion7())    
-        ]);
+        SetupDeadEvents(files.DeadFiles.First(), new DeadWalEvent(Guid.CreateVersion7()));
         
         Exception exception = new("Custom exception");
         _enqAppender.SetExceptionOnAppend(exception);
