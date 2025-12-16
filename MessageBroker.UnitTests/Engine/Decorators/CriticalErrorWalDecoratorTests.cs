@@ -83,7 +83,36 @@ public class CriticalErrorWalDecoratorTests
     }
 
     [Fact]
-    public void Append_CallsShutdownServiceOnlyOnce_WhenWalStorageExceptionOccurs()
+    public void Append_StopsProcessingNewEvents_WhenWalStorageExceptionOccurs()
+    {
+        // Arrange
+        WalStorageException exception = new("Custom exception");
+
+        _innerWalMock.Setup(i => i.Append(It.IsAny<WalEvent>()))
+            .Throws(exception);
+        
+        CriticalErrorWalDecorator sut = CreateSut();
+        
+        // Act
+        for (int i = 0; i < 100; i++)
+        {
+            try
+            {
+                sut.Append(new EnqueueWalEvent(Guid.CreateVersion7(), [0x01]));
+            }
+            catch { }
+        }
+        
+        // Assert
+        _criticalServiceMock.Verify(
+            c => c.Raise(It.IsAny<string>(), It.IsAny<Exception>()), 
+            Times.Once);
+
+        _innerWalMock.Verify(i => i.Append(It.IsAny<WalEvent>()), Times.Once);
+    }
+    
+    [Fact]
+    public void Append_CallsShutdownServiceOnlyOnce_WhenWalStorageExceptionOccursUnderConcurrentLoad()
     {
         // Arrange
         WalStorageException exception = new("Custom exception");
