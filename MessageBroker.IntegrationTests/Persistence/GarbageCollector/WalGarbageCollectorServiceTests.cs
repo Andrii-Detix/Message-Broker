@@ -40,7 +40,11 @@ public class WalGarbageCollectorServiceTests : IDisposable
         _enqAppenderMock.Setup(a => a.CurrentFile).Returns("merged-enq.log");
         _ackAppenderMock.Setup(a => a.CurrentFile).Returns("merged-ack.log");
         _deadAppenderMock.Setup(a => a.CurrentFile).Returns("merged-dead.log");
-
+        
+        _enqReaderMock.Setup(r => r.Read(It.IsAny<string>())).Returns([]);
+        _ackReaderMock.Setup(r => r.Read(It.IsAny<string>())).Returns([]);
+        _deadReaderMock.Setup(r => r.Read(It.IsAny<string>())).Returns([]);
+        
         _directory = Path.Combine(Path.GetTempPath(), Path.GetRandomFileName());
         Directory.CreateDirectory(_directory);
     }
@@ -300,6 +304,88 @@ public class WalGarbageCollectorServiceTests : IDisposable
         _manifestMock.Verify(x => x.Save(It.IsAny<WalManifest>()), Times.Never);
     }
 
+    [Fact]
+    public void Collect_DeletesOldInactiveFiles_WhenCollectSucceeds()
+    {
+        // Arrange
+        WalFiles files = new()
+        {
+            EnqueueFiles = CreateFiles("old-enq-merged", "enq-1", "enq-2", "enq-active").ToList(),
+            AckFiles = CreateFiles("old-ack-merged", "ack-1", "ack-active").ToList(),
+            DeadFiles = CreateFiles("old-dead-merged", "dead-1", "dead-active").ToList()
+        };
+        
+        _manifestMock.Setup(m => m.LoadWalFiles()).Returns(files);
+        
+        string[] oldInactiveFiles = 
+        [
+            ..files.EnqueueFiles.SkipLast(1), 
+            ..files.AckFiles.SkipLast(1), 
+            ..files.DeadFiles.SkipLast(1)
+        ];
+        
+        string[] activeFiles = 
+        [
+            files.EnqueueFiles.Last(),  
+            files.AckFiles.Last(), 
+            files.DeadFiles.Last()
+        ];
+        
+        WalGarbageCollectorService sut = CreateSut();
+        
+        // Act
+        sut.Collect();
+        
+        // Assert
+        foreach (string oldInactiveFile in oldInactiveFiles)
+        {
+            File.Exists(oldInactiveFile).ShouldBeFalse();
+        }
+
+        foreach (string activeFile in activeFiles)
+        {
+            File.Exists(activeFile).ShouldBeTrue();
+        }
+    }
+
+    [Fact]
+    public void Collect_PreservesFiles_WhenExceptionOccurs()
+    {
+        // Arrange
+        WalFiles files = new()
+        {
+            EnqueueFiles = CreateFiles("old-enq-merged", "enq-1", "enq-2", "enq-active").ToList(),
+            AckFiles = CreateFiles("old-ack-merged", "ack-1", "ack-active").ToList(),
+            DeadFiles = CreateFiles("old-dead-merged", "dead-1", "dead-active").ToList()
+        };
+
+        string[] allFiles = [..files.EnqueueFiles, ..files.AckFiles, ..files.DeadFiles];
+        
+        _manifestMock.Setup(m => m.LoadWalFiles()).Returns(files);
+        
+        _enqReaderMock.Setup(r => r.Read(files.EnqueueFiles.First())).Returns(
+        [
+            new EnqueueWalEvent(Guid.CreateVersion7(), [0x01])    
+        ]);
+        
+        Exception exception = new("Custom exception");
+        _enqAppenderMock.Setup(a => a.Append(It.IsAny<EnqueueWalEvent>()))
+            .Throws(exception);
+        
+        WalGarbageCollectorService sut = CreateSut();
+        
+        // Act
+        Action actual = () => sut.Collect();
+        
+        // Assert
+        actual.ShouldThrow<Exception>(exception.Message);
+
+        foreach (string file in allFiles)
+        {
+            File.Exists(file).ShouldBeTrue();
+        }
+    }
+
     private WalGarbageCollectorService CreateSut()
     {
         return new WalGarbageCollectorService(
@@ -316,6 +402,19 @@ public class WalGarbageCollectorServiceTests : IDisposable
         string path = Path.Combine(_directory, fileName);
         File.Create(path).Dispose();
         return path;
+    }
+
+    private string[] CreateFiles(params string[] fileNames)
+    {
+        List<string> paths = [];
+        
+        foreach (string fileName in fileNames)
+        {
+            string path = CreateFile(fileName);
+            paths.Add(path);
+        }
+        
+        return paths.ToArray();
     }
 
     public void Dispose()
