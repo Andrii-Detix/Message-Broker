@@ -390,6 +390,79 @@ public class WalGarbageCollectorServiceTests : IDisposable
         File.Exists(_deadAppender.CurrentFile).ShouldBeFalse();
     }
 
+    [Fact]
+    public void Collect_CorrectlyFiltersEvents_InComplexMixedScenario()
+    {
+        // Arrange
+        Guid messageId1 = Guid.CreateVersion7();
+        Guid messageId2 = Guid.CreateVersion7();
+        Guid messageId3 = Guid.CreateVersion7();
+        Guid messageId4 = Guid.CreateVersion7();
+        Guid messageId5 = Guid.CreateVersion7();
+        Guid messageId6 = Guid.CreateVersion7();
+        Guid messageId7 = Guid.CreateVersion7();
+        
+        WalFiles files = new()
+        {
+            EnqueueFiles = ["enq-1", "enq-2", "enq-3", "enq-5"],
+            AckFiles = ["ack-1", "ack-2", "ack-3"],
+            DeadFiles = ["dead-1", "dead-2", "dead-3"]
+        };
+
+        SetupWalFiles(files);
+        
+        SetupEnqueueEvents(
+            "enq-1", 
+            new EnqueueWalEvent(messageId1, []),
+            new EnqueueWalEvent(messageId2, []));
+        SetupEnqueueEvents("enq-2");
+        SetupEnqueueEvents(
+            "enq-3", 
+            new EnqueueWalEvent(messageId3, []),
+            new RequeueWalEvent(messageId1),
+            new EnqueueWalEvent(messageId4, []),
+            new RequeueWalEvent(messageId1));
+        SetupEnqueueEvents(
+            "enq-5",
+            new RequeueWalEvent(messageId3),
+            new EnqueueWalEvent(messageId5, []),
+            new EnqueueWalEvent(messageId6, []),
+            new EnqueueWalEvent(messageId7, []));
+        
+        SetupAckEvents("ack-1");
+        SetupAckEvents("ack-2", 
+            new AckWalEvent(messageId3),
+            new AckWalEvent(messageId7));
+        SetupAckEvents("ack-3", new AckWalEvent(messageId5));
+        
+        SetupDeadEvents("dead-1", 
+            new DeadWalEvent(messageId4),
+            new DeadWalEvent(messageId6));
+        SetupDeadEvents("dead-2");
+        SetupDeadEvents("dead-3", new DeadWalEvent(messageId1));
+        
+        WalGarbageCollectorService sut = CreateSut();
+        
+        // Act
+        sut.Collect();
+        
+        // Assert
+        _enqAppender.Events.ShouldBe([
+            new EnqueueWalEvent(messageId1, []),
+            new EnqueueWalEvent(messageId2, []),
+            new RequeueWalEvent(messageId1),
+            new RequeueWalEvent(messageId1),
+        ]);
+
+        _ackAppender.Events.ShouldBe([
+            new AckWalEvent(messageId7)
+        ]);
+
+        _deadAppender.Events.ShouldBe([
+            new DeadWalEvent(messageId6)
+        ]);
+    }
+
     private WalGarbageCollectorService CreateSut()
     {
         return new WalGarbageCollectorService(
@@ -419,6 +492,26 @@ public class WalGarbageCollectorServiceTests : IDisposable
         }
         
         return paths.ToArray();
+    }
+    
+    private void SetupEnqueueEvents(string file, params EnqueueWalEvent[] events)
+    {
+        _enqReaderMock.Setup(r => r.Read(file)).Returns(events);
+    }
+
+    private void SetupAckEvents(string file, params AckWalEvent[] events)
+    {
+        _ackReaderMock.Setup(r => r.Read(file)).Returns(events);
+    }
+
+    private void SetupDeadEvents(string file, params DeadWalEvent[] events)
+    {
+        _deadReaderMock.Setup(r => r.Read(file)).Returns(events);
+    }
+    
+    private void SetupWalFiles(WalFiles files)
+    {
+        _manifestMock.Setup(m => m.LoadWalFiles()).Returns(files);
     }
 
     public void Dispose()
