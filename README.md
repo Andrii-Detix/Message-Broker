@@ -275,11 +275,17 @@ All commands should be executed from the solution root.
 
 ### Prerequisites
 
-Before running End-to-End tests you **must build the Docker image** used by Testcontainers.
+The solution supports two modes for running End-to-End durability tests: **In-Memory** (default) or via **Docker**.
 
-```bash
-docker build -t message-broker:test -f MessageBroker.Api/Dockerfile .
-```
+To use the **Docker** mode, you must:
+
+1. Build the Docker image:
+
+    ```bash
+    docker build -t message-broker:test -f MessageBroker.Api/Dockerfile .
+    ```
+
+2. Set the `USE_DOCKER` environment variable to `true` when running tests.
 
 ### Quick Run
 
