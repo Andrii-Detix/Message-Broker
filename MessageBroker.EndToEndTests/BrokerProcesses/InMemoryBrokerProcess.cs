@@ -12,10 +12,9 @@ public class InMemoryBrokerProcess(
 {
     private readonly WebApplicationFactory<Program> _factory = Create(hostDirectory, resetOnStart, envVars);
     
-    public Task StartAsync()
+    public async Task StartAsync()
     {
         _factory.StartServer();
-        return Task.CompletedTask;
     }
 
     public async Task StopAsync()
@@ -38,7 +37,8 @@ public class InMemoryBrokerProcess(
         
         if (!string.IsNullOrWhiteSpace(hostDirectory))
         {
-            factory = factory.WithOption("MessageBroker:Wal:Directory", hostDirectory);
+            string walDirectory = Path.Combine(hostDirectory, "wal");
+            factory = factory.WithOption("MessageBroker:Wal:Directory", walDirectory);
         }
 
         if (envVars is not null)

@@ -19,9 +19,9 @@ public class DockerBrokerProcess(
 
     private readonly IContainer _container = Create(hostDirectory, resetOnStart, envVars);
     
-    public Task StartAsync()
+    public async Task StartAsync()
     {
-        return _container.StartAsync();
+        await _container.StartAsync();
     }
 
     public async Task StopAsync()
@@ -32,7 +32,7 @@ public class DockerBrokerProcess(
 
     public HttpClient CreateClient()
     {
-        int port = _container.GetMappedPublicPort(BrokerContainerFactory.InternalPort);
+        int port = _container.GetMappedPublicPort(InternalPort);
         return new HttpClient
         {
             BaseAddress = new Uri($"http://localhost:{port}")
