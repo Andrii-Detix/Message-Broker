@@ -382,13 +382,7 @@ public class DurabilityTests : IDisposable
             .GetFiles(directoryPath, "enqueue-*.log")
             .First(f => !f.Contains("merged"));
 
-        await using (var fs = new FileStream(enqueueFile, FileMode.Open, FileAccess.Write))
-        {
-            fs.Position = 0;
-        
-            byte[] garbage = [0xFF, 0xFF, 0xFF, 0xFF, 0x00, 0x01, 0x02]; 
-            fs.Write(garbage, 0, garbage.Length);
-        }
+        await CorruptFileWithRetryA(enqueueFile);
         
         IBrokerProcess broker2 = _factory.Create(_hostDirectory, envVars: options);
         
@@ -563,6 +557,34 @@ public class DurabilityTests : IDisposable
     {
         HttpResponseMessage response = await client.GetAsync(HttpHelper.ConsumeUrl);
         response.StatusCode.ShouldBe(HttpStatusCode.NoContent);
+    }
+    
+    private async Task CorruptFileWithRetryA(string filePath)
+    {
+        const int maxRetries = 20;
+        const int delay = 200;
+
+        for (int i = 0; i < maxRetries; i++)
+        {
+            try
+            {
+                await using FileStream fs = new(filePath, FileMode.Open, FileAccess.Write, FileShare.None);
+                fs.Position = 0;
+                byte[] garbage = [0xFF, 0xFF, 0xFF, 0xFF, 0x00, 0x01, 0x02]; 
+                fs.Write(garbage, 0, garbage.Length);
+                
+                return;
+            }
+            catch (IOException)
+            {
+                if (i == maxRetries - 1)
+                {
+                    throw;
+                }
+            }
+            
+            await Task.Delay(delay);
+        }
     }
 
     public void Dispose()
