@@ -1,8 +1,10 @@
 ﻿using FsCheck;
 using FsCheck.Fluent;
+using MessageBroker.Core.Abstractions;
 using MessageBroker.Core.Messages.Models;
 using MessageBroker.Core.Queues;
 using Microsoft.Extensions.Time.Testing;
+using Moq;
 
 namespace MessageBroker.UnitTests.Core.Queues;
 
@@ -132,6 +134,50 @@ public class MessageQueuePropertyTests
                 .SequenceEqual(consumedMessages.Select(m => m.Id));
             
             return countMatch && orderMatch;
+        });
+    }
+
+    [FsCheck.Xunit.Property]
+    public Property TakeExpiredMessages_RemovesOnlyExpiredMessagesFromInFlight_WhenInFlightContainsMixedMessages()
+    {
+        var scenarioGen =
+            from expired in MessageGenerator().Generator.NonEmptyListOf()
+            from active in MessageGenerator().Generator.NonEmptyListOf()
+            where !expired.Select(m => m.Id).Intersect(active.Select(m => m.Id)).Any()
+            from shuffled in Gen.Shuffle(expired.Concat(active))
+            select (expired, active, shuffled);
+
+        return Prop.ForAll(scenarioGen.ToArbitrary(), scenarioData =>
+        {
+            // Arrange
+            (List<Message> expired, List<Message> active, Message[] shuffled) = scenarioData;
+            
+            MessageQueue sut = new(shuffled.Length + 1, _timeProvider);
+
+            foreach (Message message in shuffled)
+            {
+                sut.TryEnqueue(message);
+                sut.TryConsume(out _);
+            }
+            
+            Mock<IExpiredMessagePolicy> policyMock = new();
+            policyMock.Setup(p => p.IsExpired(It.IsAny<Message>()))
+                .Returns((Message message) => expired.Select(m => m.Id).Contains(message.Id));
+            IExpiredMessagePolicy policy = policyMock.Object;
+            
+            // Act
+            List<Message> actual = sut.TakeExpiredMessages(policy).ToList();
+            
+            // Assert
+            bool countMatch = actual.Count == expired.Count;
+
+            bool includeMath = expired.All(e => actual.Select(m => m.Id).Contains(e.Id));
+
+            bool removedMatch = expired.All(e => sut.Ack(e.Id) is null);
+            
+            bool activeMatch = active.All(a => sut.Ack(a.Id) is not null);
+            
+            return countMatch && includeMath && removedMatch && activeMatch;
         });
     }
     
