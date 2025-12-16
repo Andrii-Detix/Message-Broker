@@ -299,6 +299,45 @@ public class WalGarbageCollectorServiceTests : IDisposable
             File.Exists(activeFile).ShouldBeTrue();
         }
     }
+    
+    [Fact]
+    public void Collect_DoesNotDeleteNewMergedFiles_WhenCollectSucceeds()
+    {
+        // Arrange
+        WalFiles files = new()
+        {
+            EnqueueFiles = CreateFiles("enq-1", "enq-active").ToList(),
+            AckFiles = CreateFiles("ack-1", "ack-active").ToList(),
+            DeadFiles = CreateFiles("dead-1", "dead-active").ToList()
+        };
+        
+        _manifestMock.Setup(m => m.LoadWalFiles()).Returns(files);
+        
+        _enqReaderMock.Setup(r => r.Read(files.EnqueueFiles.First())).Returns(
+        [
+            new EnqueueWalEvent(Guid.CreateVersion7(), [0x01])    
+        ]);
+        
+        _ackReaderMock.Setup(r => r.Read(files.AckFiles.First())).Returns(
+        [
+            new AckWalEvent(Guid.CreateVersion7())    
+        ]);
+        
+        _deadReaderMock.Setup(r => r.Read(files.DeadFiles.First())).Returns(
+        [
+            new DeadWalEvent(Guid.CreateVersion7())    
+        ]);
+        
+        WalGarbageCollectorService sut = CreateSut();
+        
+        // Act
+        sut.Collect();
+        
+        // Assert
+        File.Exists(_enqAppender.CurrentFile).ShouldBeTrue();
+        File.Exists(_ackAppender.CurrentFile).ShouldBeTrue();
+        File.Exists(_deadAppender.CurrentFile).ShouldBeTrue();
+    }
 
     [Fact]
     public void Collect_Rollbacks_WhenExceptionOccurs()
