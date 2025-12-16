@@ -15,38 +15,34 @@ public class WalGarbageCollectorServiceTests : IDisposable
     private readonly Mock<IWalReader<DeadWalEvent>> _deadReaderMock;
     private readonly Mock<IFileAppenderFactory> _factoryMock;
 
-    private readonly Mock<IFileAppender<EnqueueWalEvent>> _enqAppenderMock;
-    private readonly Mock<IFileAppender<AckWalEvent>> _ackAppenderMock;
-    private readonly Mock<IFileAppender<DeadWalEvent>> _deadAppenderMock;
+    private readonly TestFileAppender<EnqueueWalEvent> _enqAppender;
+    private readonly TestFileAppender<AckWalEvent> _ackAppender;
+    private readonly TestFileAppender<DeadWalEvent> _deadAppender;
 
     private readonly string _directory;
 
     public WalGarbageCollectorServiceTests()
     {
+        _directory = Path.Combine(Path.GetTempPath(), Path.GetRandomFileName());
+        Directory.CreateDirectory(_directory);
+        
         _manifestMock = new();
         _enqReaderMock = new();
         _ackReaderMock = new();
         _deadReaderMock = new();
         _factoryMock = new();
 
-        _enqAppenderMock = new();
-        _ackAppenderMock = new();
-        _deadAppenderMock = new();
+        _enqAppender = new(_directory, "merged-enq.log");
+        _ackAppender = new(_directory, "merged-ack.log");
+        _deadAppender = new(_directory, "merged-dead.log");
 
-        _factoryMock.Setup(f => f.Create<EnqueueWalEvent>()).Returns(_enqAppenderMock.Object);
-        _factoryMock.Setup(f => f.Create<AckWalEvent>()).Returns(_ackAppenderMock.Object);
-        _factoryMock.Setup(f => f.Create<DeadWalEvent>()).Returns(_deadAppenderMock.Object);
-
-        _enqAppenderMock.Setup(a => a.CurrentFile).Returns("merged-enq.log");
-        _ackAppenderMock.Setup(a => a.CurrentFile).Returns("merged-ack.log");
-        _deadAppenderMock.Setup(a => a.CurrentFile).Returns("merged-dead.log");
+        _factoryMock.Setup(f => f.Create<EnqueueWalEvent>()).Returns(_enqAppender);
+        _factoryMock.Setup(f => f.Create<AckWalEvent>()).Returns(_ackAppender);
+        _factoryMock.Setup(f => f.Create<DeadWalEvent>()).Returns(_deadAppender);
         
         _enqReaderMock.Setup(r => r.Read(It.IsAny<string>())).Returns([]);
         _ackReaderMock.Setup(r => r.Read(It.IsAny<string>())).Returns([]);
         _deadReaderMock.Setup(r => r.Read(It.IsAny<string>())).Returns([]);
-        
-        _directory = Path.Combine(Path.GetTempPath(), Path.GetRandomFileName());
-        Directory.CreateDirectory(_directory);
     }
 
     [Fact]
@@ -84,15 +80,13 @@ public class WalGarbageCollectorServiceTests : IDisposable
         sut.Collect();
 
         // Assert
-        _enqAppenderMock.Verify(a => 
-            a.Append(It.Is<EnqueueWalEvent>(e => e.MessageId == message1)), Times.Once);
+        _enqAppender.Verify(e => e.MessageId == message1, 1);
         
-        _enqAppenderMock.Verify(a => 
-            a.Append(It.Is<EnqueueWalEvent>(e => e.MessageId == message2)), Times.Never);
+        _enqAppender.Verify(e => e.MessageId == message2, 0);
 
         _manifestMock.Verify(m => 
             m.Save(It.Is<WalManifest>(man => 
-                man.EnqueueMerged == "merged-enq.log" && 
+                man.EnqueueMerged == _enqAppender.CurrentFile && 
                 man.AckMerged == string.Empty)), Times.Once);
     }
 
@@ -121,11 +115,10 @@ public class WalGarbageCollectorServiceTests : IDisposable
         sut.Collect();
 
         // Assert
-        _ackAppenderMock.Verify(a => 
-            a.Append(It.Is<AckWalEvent>(e => e.MessageId == unmatchedMessageId)), Times.Once);
+        _ackAppender.Verify(e => e.MessageId == unmatchedMessageId, 1);
 
         _manifestMock.Verify(m => m.Save(It.Is<WalManifest>(man => 
-            man.AckMerged == "merged-ack.log")), Times.Once);
+            man.AckMerged == _ackAppender.CurrentFile)), Times.Once);
     }
     
     [Fact]
@@ -154,8 +147,7 @@ public class WalGarbageCollectorServiceTests : IDisposable
         sut.Collect();
 
         // Assert
-        _enqAppenderMock.Verify(a => 
-            a.Append(It.Is<RequeueWalEvent>(e => e.MessageId == zombieId)), Times.Never);
+        _enqAppender.Verify(e => e.MessageId == zombieId, 0);
     }
     
     [Fact]
@@ -193,20 +185,18 @@ public class WalGarbageCollectorServiceTests : IDisposable
         sut.Collect();
 
         // Assert
-        _enqAppenderMock.Verify(a => 
-            a.Append(It.Is<EnqueueWalEvent>(e => e.MessageId == message1)), Times.Once);
+        _enqAppender.Verify(e => e.MessageId == message1, 1);
         
-        _enqAppenderMock.Verify(a => 
-            a.Append(It.Is<EnqueueWalEvent>(e => e.MessageId == message2)), Times.Never);
+        _enqAppender.Verify(e => e.MessageId == message2, 0);
 
         _manifestMock.Verify(m => 
             m.Save(It.Is<WalManifest>(man => 
-                man.EnqueueMerged == "merged-enq.log" && 
+                man.EnqueueMerged == _enqAppender.CurrentFile && 
                 man.DeadMerged == string.Empty)), Times.Once);
     }
     
     [Fact]
-    public void Collect_PreservsDeadEvents_WhenDoNotHaveMatchedEnqueueEvent()
+    public void Collect_PreservesDeadEvents_WhenDoNotHaveMatchedEnqueueEvent()
     {
         // Arrange
         string closedDeadLog = CreateFile("dead-closed-segment.log");
@@ -230,11 +220,10 @@ public class WalGarbageCollectorServiceTests : IDisposable
         sut.Collect();
 
         // Assert
-        _deadAppenderMock.Verify(a => 
-            a.Append(It.Is<DeadWalEvent>(e => e.MessageId == unmatchedMessageId)), Times.Once);
+        _deadAppender.Verify(e => e.MessageId == unmatchedMessageId, 1);
 
         _manifestMock.Verify(m => m.Save(It.Is<WalManifest>(man => 
-            man.DeadMerged == "merged-dead.log")), Times.Once);
+            man.DeadMerged == _deadAppender.CurrentFile)), Times.Once);
     }
     
     [Fact]
@@ -264,48 +253,11 @@ public class WalGarbageCollectorServiceTests : IDisposable
         sut.Collect();
 
         // Assert
-        _enqAppenderMock.Verify(a => 
-            a.Append(It.Is<RequeueWalEvent>(e => e.MessageId == messageId)), Times.Once);
+        _enqAppender.Verify(e => new RequeueWalEvent(messageId) == e, 1);
     }
-
+    
     [Fact]
-    public void Collect_Rollbacks_WhenExceptionOccurs()
-    {
-        // Arrange
-        string enqFile = CreateFile("enq-error.log");
-        _manifestMock.Setup(m => m.LoadWalFiles()).Returns(new WalFiles
-        {
-            EnqueueFiles = [enqFile, "active"], 
-            AckFiles = ["active"], 
-            DeadFiles = ["active"]
-        });
-        
-        Guid messageId = Guid.CreateVersion7();
-
-        _enqReaderMock.Setup(r => r.Read(enqFile)).Returns(
-        [
-            new EnqueueWalEvent(messageId, [0x01])    
-        ]);
-
-        Exception exception = new("Custom exception");
-        _enqAppenderMock.Setup(a => a.Append(It.IsAny<EnqueueWalEvent>()))
-            .Throws(exception);
-
-        WalGarbageCollectorService sut = CreateSut();
-
-        // Act
-        Action actual = () => sut.Collect();
-        
-        // Assert
-        actual.ShouldThrow<Exception>(exception.Message);
-
-        File.Exists(enqFile).ShouldBeTrue();
-        
-        _manifestMock.Verify(x => x.Save(It.IsAny<WalManifest>()), Times.Never);
-    }
-
-    [Fact]
-    public void Collect_DeletesOldInactiveFiles_WhenCollectSucceeds()
+    public void Collect_DeletesOnlyOldInactiveFiles_WhenCollectSucceeds()
     {
         // Arrange
         WalFiles files = new()
@@ -349,7 +301,7 @@ public class WalGarbageCollectorServiceTests : IDisposable
     }
 
     [Fact]
-    public void Collect_PreservesFiles_WhenExceptionOccurs()
+    public void Collect_Rollbacks_WhenExceptionOccurs()
     {
         // Arrange
         WalFiles files = new()
@@ -368,9 +320,18 @@ public class WalGarbageCollectorServiceTests : IDisposable
             new EnqueueWalEvent(Guid.CreateVersion7(), [0x01])    
         ]);
         
+        _ackReaderMock.Setup(r => r.Read(files.AckFiles.First())).Returns(
+        [
+            new AckWalEvent(Guid.CreateVersion7())    
+        ]);
+        
+        _deadReaderMock.Setup(r => r.Read(files.DeadFiles.First())).Returns(
+        [
+            new DeadWalEvent(Guid.CreateVersion7())    
+        ]);
+        
         Exception exception = new("Custom exception");
-        _enqAppenderMock.Setup(a => a.Append(It.IsAny<EnqueueWalEvent>()))
-            .Throws(exception);
+        _enqAppender.SetExceptionOnAppend(exception);
         
         WalGarbageCollectorService sut = CreateSut();
         
@@ -384,6 +345,10 @@ public class WalGarbageCollectorServiceTests : IDisposable
         {
             File.Exists(file).ShouldBeTrue();
         }
+        
+        File.Exists(_enqAppender.CurrentFile).ShouldBeFalse();
+        File.Exists(_ackAppender.CurrentFile).ShouldBeFalse();
+        File.Exists(_deadAppender.CurrentFile).ShouldBeFalse();
     }
 
     private WalGarbageCollectorService CreateSut()
